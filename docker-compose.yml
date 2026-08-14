@@ -55,6 +55,14 @@ services:
       # Conversión Office (LibreOffice)
       TODOPDF_SOFFICE_TIMEOUT_MS: ${TODOPDF_SOFFICE_TIMEOUT_MS:-120000}
       TODOPDF_OFFICE_MAX_CONCURRENCY: ${TODOPDF_OFFICE_MAX_CONCURRENCY:-1}
+      # Descargador de vídeos (yt-dlp)
+      TODOPDF_DOWNLOAD_CONCURRENCY: ${TODOPDF_DOWNLOAD_CONCURRENCY:-2}
+      TODOPDF_DOWNLOAD_TIMEOUT_MS: ${TODOPDF_DOWNLOAD_TIMEOUT_MS:-1800000}
+      # Quitar fondo de imagen (rembg, solo autenticados)
+      TODOPDF_REMOVEBG_PYTHON: python3
+      TODOPDF_REMOVEBG_MODEL: ${TODOPDF_REMOVEBG_MODEL:-u2net}
+      TODOPDF_REMOVEBG_TIMEOUT_MS: ${TODOPDF_REMOVEBG_TIMEOUT_MS:-120000}
+      TODOPDF_REMOVEBG_CONCURRENCY: ${TODOPDF_REMOVEBG_CONCURRENCY:-1}
       # Storage (montado como volumen)
       TODOPDF_STORAGE_DIR: /data/storage
       TODOPDF_TEMP_DIR: /data/tmp
@@ -69,8 +77,8 @@ services:
     # Memoria: LibreOffice headless puede consumir cientos de MB por instancia
     # (concurrencia Office limitada a 1). shm_size cubre el /dev/shm que usa LO.
     shm_size: "256m"
-    # Protección básica de RAM
-    mem_limit: ${TODOPDF_BACKEND_MEM_LIMIT:-2g}
+    # Protección básica de RAM (rembg + LibreOffice necesitan margen)
+    mem_limit: ${TODOPDF_BACKEND_MEM_LIMIT:-3g}
 
   # ── Frontend (Astro + nginx) ───────────────────────────────
   frontend:

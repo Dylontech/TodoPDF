@@ -75,6 +75,42 @@ const config = {
     storageDir: process.env.TODOPDF_STORAGE_DIR || '/data/storage',
     // Directorio temporal para los uploads autenticados (se limpia tras procesar)
     tempDir: process.env.TODOPDF_TEMP_DIR || '/data/tmp'
+  },
+
+  // ── Descargador de vídeos (yt-dlp, solo usuarios autenticados) ──
+  downloader: {
+    // Binario de yt-dlp (instalado en el host o por el Dockerfile)
+    ytdlpPath: process.env.TODOPDF_YTDLP_PATH || 'yt-dlp',
+    // Máximo de descargas simultáneas (protege la red y el disco)
+    maxConcurrency: Number(process.env.TODOPDF_DOWNLOAD_CONCURRENCY || 2),
+    // Tiempo máximo por descarga (los vídeos largos son lentos)
+    timeoutMs: Number(process.env.TODOPDF_DOWNLOAD_TIMEOUT_MS || 30 * 60 * 1000),
+    // Hosts permitidos (anti-SSRF): evita apuntar a la red interna
+    allowedHosts: (
+      process.env.TODOPDF_DOWNLOAD_ALLOWED_HOSTS ||
+      'youtube.com,youtu.be,m.youtube.com,music.youtube.com,youtube-nocookie.com,' +
+        'tiktok.com,vm.tiktok.com,' +
+        'twitter.com,x.com,t.co,' +
+        'instagram.com,facebook.com,fb.watch,' +
+        'vimeo.com,twitch.tv,soundcloud.com,dailymotion.com,reddit.com'
+    )
+      .split(',')
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean)
+  },
+
+  // ── Quitar fondo de imagen (rembg, solo usuarios autenticados) ──
+  removeBg: {
+    // Python con rembg instalado (venv local / python3 del sistema en Docker)
+    pythonPath: process.env.TODOPDF_REMOVEBG_PYTHON || 'python3',
+    // Script Python que invoca rembg (imagen por stdin, PNG de salida)
+    scriptPath: path.join(__dirname, '../../scripts/remove_bg.py'),
+    // Modelo ONNX: 'u2net' (calidad, ~170 MB) o 'u2netp' (ligero/rápido)
+    model: process.env.TODOPDF_REMOVEBG_MODEL || 'u2net',
+    // Tiempo máximo por imagen (la inferencia en CPU es lenta)
+    timeoutMs: Number(process.env.TODOPDF_REMOVEBG_TIMEOUT_MS || 120_000),
+    // Procesamientos simultáneos (protege la RAM/CPU del servidor)
+    maxConcurrency: Number(process.env.TODOPDF_REMOVEBG_CONCURRENCY || 1)
   }
 };
 

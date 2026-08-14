@@ -251,8 +251,15 @@ async function download(req, res, next) {
       return archive.finalize();
     }
 
-    // Imágenes → PDF: archivo único
-    res.setHeader('Content-Type', 'application/pdf');
+    // Archivo único: el Content-Type depende de la extensión del resultado
+    // (PDF, o PNG/WebP/JPG para herramientas de imagen como "quitar fondo").
+    const ext = path.extname(row.output_path).toLowerCase();
+    const mime =
+      ext === '.png' ? 'image/png'
+      : ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg'
+      : ext === '.webp' ? 'image/webp'
+      : 'application/pdf';
+    res.setHeader('Content-Type', mime);
     res.setHeader('Content-Disposition', `attachment; filename="${path.basename(row.output_path)}"`);
     res.sendFile(row.output_path);
   } catch (err) {

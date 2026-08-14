@@ -15,7 +15,8 @@ import Layout from '../layouts/Layout.astro';
 <script>
   const LABELS = {
     'pdf-to-images': 'PDF → Imágenes',
-    'images-to-pdf': 'Imágenes → PDF'
+    'images-to-pdf': 'Imágenes → PDF',
+    'remove-bg': 'Quitar fondo'
   };
 
   async function main() {
@@ -50,7 +51,7 @@ import Layout from '../layouts/Layout.astro';
     box.innerHTML = `
       <table class="history-table">
         <thead>
-          <tr><th>Tipo</th><th>Archivo de origen</th><th>Tamaño</th><th>Fecha</th><th></th></tr>
+          <tr><th>Tipo</th><th>Archivo de origen</th><th>Tamaño</th><th class="col-date">Fecha</th><th></th></tr>
         </thead>
         <tbody>
           ${history
@@ -60,7 +61,7 @@ import Layout from '../layouts/Layout.astro';
                   <td>${LABELS[h.type] || escapeHtml(h.type)}</td>
                   <td class="truncate" title="${escapeHtml(h.input_filename)}">${escapeHtml(h.input_filename)}</td>
                   <td>${formatSize(h.size)}</td>
-                  <td>${new Date(h.created_at).toLocaleString('es')}</td>
+                  <td class="col-date">${new Date(h.created_at).toLocaleString('es')}</td>
                   <td><a class="btn-download" href="/api/convert/${h.id}/download">Descargar</a></td>
                 </tr>`
             )

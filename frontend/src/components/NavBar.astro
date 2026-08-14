@@ -7,33 +7,50 @@
 <header class="navbar">
   <div class="navbar-inner">
     <a href="/" class="brand">📄 TodoPDF</a>
-    <nav class="nav-links">
-      <a href="/pdf-a-jpg">PDF → Imágenes</a>
-      <a href="/imagenes-a-pdf">Imágenes → PDF</a>
-      <a href="/pdf-a-office">PDF → Office</a>
-      <a href="/office-a-pdf">Office → PDF</a>
-      <details class="nav-dropdown">
-        <summary>Herramientas PDF <span class="caret">▾</span></summary>
-        <div class="dropdown-menu">
-          <a href="/dividir-pdf">Dividir PDF</a>
-          <a href="/extraer-paginas">Extraer páginas</a>
-          <a href="/fusionar-pdf">Fusionar PDF</a>
-          <a href="/insertar-paginas">Insertar páginas</a>
-          <a href="/rotar-paginas">Rotar páginas</a>
-          <a href="/eliminar-paginas">Eliminar páginas</a>
-          <a href="/organizar-paginas">Organizar páginas</a>
-          <a href="/comprimir-pdf">Comprimir PDF</a>
-        </div>
-      </details>
-    </nav>
-    <div id="nav-auth" class="nav-auth">
-      <a href="/login">Iniciar sesión</a>
-      <a href="/register" class="btn-outline">Registrarse</a>
+
+    <input type="checkbox" id="nav-toggle" class="nav-toggle" aria-hidden="true" />
+    <label for="nav-toggle" class="nav-hamburger" aria-label="Abrir menú" aria-controls="nav-menu">
+      <span class="hamburger-bar"></span>
+      <span class="hamburger-bar"></span>
+      <span class="hamburger-bar"></span>
+    </label>
+
+    <div id="nav-menu" class="nav-menu">
+      <nav class="nav-links">
+        <a href="/pdf-a-jpg">PDF → Imágenes</a>
+        <a href="/imagenes-a-pdf">Imágenes → PDF</a>
+        <a href="/pdf-a-office">PDF → Office</a>
+        <a href="/office-a-pdf">Office → PDF</a>
+        <details class="nav-dropdown">
+          <summary>Herramientas PDF <span class="caret">▾</span></summary>
+          <div class="dropdown-menu">
+            <a href="/dividir-pdf">Dividir PDF</a>
+            <a href="/extraer-paginas">Extraer páginas</a>
+            <a href="/fusionar-pdf">Fusionar PDF</a>
+            <a href="/insertar-paginas">Insertar páginas</a>
+            <a href="/rotar-paginas">Rotar páginas</a>
+            <a href="/eliminar-paginas">Eliminar páginas</a>
+            <a href="/organizar-paginas">Organizar páginas</a>
+            <a href="/comprimir-pdf">Comprimir PDF</a>
+          </div>
+        </details>
+      </nav>
+      <div id="nav-auth" class="nav-auth">
+        <a href="/login">Iniciar sesión</a>
+        <a href="/register" class="btn-outline">Registrarse</a>
+      </div>
     </div>
   </div>
 </header>
 
 <script>
+  // Cierra el menú móvil al pulsar cualquier enlace o botón de dentro.
+  const navToggle = document.getElementById('nav-toggle') as HTMLInputElement | null;
+  document.getElementById('nav-menu')?.addEventListener('click', (e) => {
+    const target = e.target as HTMLElement | null;
+    if (target?.closest('a, button') && navToggle) navToggle.checked = false;
+  });
+
   // Actualiza la navegación según haya sesión o no.
   async function updateNav() {
     const el = document.getElementById('nav-auth');
@@ -43,6 +60,8 @@
       const data = await res.json();
       if (res.ok && data.user) {
         el.innerHTML = `
+          <a href="/descargar-videos">Descargar vídeos</a>
+          <a href="/quitar-fondo">Quitar fondo</a>
           <a href="/historial">Historial</a>
           <button id="btn-logout" class="btn-outline">Cerrar sesión</button>`;
         document.getElementById('btn-logout')?.addEventListener('click', async () => {

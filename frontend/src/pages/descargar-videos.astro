@@ -1,0 +1,367 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Descargar vídeos">
+  <section class="tool downloader">
+    <h1>🎬 Descargar vídeos</h1>
+    <p>
+      Descarga vídeos y audio de YouTube, TikTok, X (Twitter) e Instagram.
+      Esta sección es <strong>exclusiva para usuarios registrados</strong>.
+    </p>
+
+    <form id="dl-form" class="upload-form" autocomplete="off">
+      <label class="field">
+        <span>Pega el enlace del vídeo</span>
+        <input
+          id="url-input"
+          type="url"
+          name="url"
+          placeholder="https://www.youtube.com/watch?v=…"
+          required
+        />
+      </label>
+      <button type="submit" id="btn-fetch" class="btn-primary">Buscar vídeo</button>
+      <p id="status" class="status" role="status"></p>
+    </form>
+
+    <!-- Tarjeta con la información del vídeo y la descarga -->
+    <div id="info-card" class="dl-card" hidden>
+      <img id="thumb" class="dl-thumb" alt="" />
+      <div class="dl-meta">
+        <span id="dl-badge" class="dl-badge"></span>
+        <h2 id="dl-title"></h2>
+        <p id="dl-extra" class="dl-extra"></p>
+        <p id="pl-note" class="pl-note" hidden></p>
+
+        <label class="field dl-format">
+          <span>Formato</span>
+          <select id="kind-select">
+            <option value="video">Vídeo (MP4, mejor calidad)</option>
+            <option value="audio">Audio (MP3)</option>
+          </select>
+        </label>
+        <button id="btn-download" class="btn-primary">Descargar</button>
+        <p id="dl-status" class="status" role="status"></p>
+        <div id="dl-result" hidden>
+          <a id="dl-link" class="btn-download" href="#">Descargar archivo</a>
+        </div>
+      </div>
+    </div>
+
+    <h2 class="section-title">Mis descargas</h2>
+    <div id="history" class="history">
+      <p class="status">Cargando…</p>
+    </div>
+  </section>
+</Layout>
+
+<style>
+  .downloader { max-width: 640px; margin: 0 auto; }
+  .dl-card {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1rem;
+    background: var(--surface);
+    color: var(--text);
+    border-radius: var(--radius);
+    padding: 1.25rem;
+    box-shadow: var(--shadow);
+  }
+  .dl-thumb {
+    width: 180px;
+    height: 101px;
+    object-fit: cover;
+    border-radius: 8px;
+    flex-shrink: 0;
+    background: #e2e8f0;
+  }
+  .dl-meta { flex: 1; display: flex; flex-direction: column; gap: 0.5rem; }
+  .dl-meta h2 { margin: 0; font-size: 1.1rem; }
+  .dl-badge {
+    align-self: flex-start;
+    background: var(--primary);
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-radius: 999px;
+    padding: 0.2rem 0.6rem;
+  }
+  .dl-extra { margin: 0; color: var(--muted); font-size: 0.85rem; }
+  .pl-note {
+    margin: 0;
+    padding: 0.5rem 0.7rem;
+    font-size: 0.85rem;
+    color: #0f172a;
+    background: #fef3c7;
+    border: 1px solid #f59e0b;
+    border-radius: 8px;
+  }
+  .dl-format select { padding: 0.5rem 0.6rem; }
+  .section-title { margin-top: 2rem; }
+  @media (max-width: 560px) {
+    .dl-card { flex-direction: column; }
+    .dl-thumb { width: 100%; height: auto; aspect-ratio: 16 / 9; }
+  }
+</style>
+
+<script>
+  /** Acceso tipado a elementos del DOM (lanza si no existen). */
+  const $ = <T extends HTMLElement>(id: string): T => {
+    const el = document.getElementById(id);
+    if (!el) throw new Error(`Elemento #${id} no encontrado`);
+    return el as T;
+  };
+
+  /** Mensaje de un error desconocido (catch). */
+  const errMsg = (err: unknown): string =>
+    err instanceof Error ? err.message : 'Error inesperado.';
+
+  /** URL de descarga de un archivo guardado. */
+  const downloadUrl = (id: number): string => `/api/downloader/${id}/download`;
+
+  type LinkInfo = {
+    isPlaylist: boolean;
+    id: string | null;
+    title: string;
+    thumbnail: string | null;
+    duration: number;
+    uploader: string | null;
+    webpageUrl: string;
+    platform: string;
+    count?: number;
+    entries?: { id: string | null; title: string; url: string | null }[];
+  };
+
+  type Download = {
+    id: number;
+    platform: string;
+    title: string;
+    kind: 'video' | 'audio';
+    ext: string;
+    size: number;
+    created_at: string;
+  };
+
+  function escapeHtml(s: unknown): string {
+    const map: Record<string, string> = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    };
+    return String(s).replace(/[&<>"']/g, (c) => map[c] ?? c);
+  }
+
+  function formatSize(bytes: number): string {
+    if (!bytes) return '—';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / 1048576).toFixed(1)} MB`;
+  }
+
+  function formatDuration(sec: number): string {
+    if (!sec) return '';
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = Math.floor(sec % 60);
+    const mm = m < 10 && h ? `0${m}` : m;
+    const ss = s < 10 ? `0${s}` : s;
+    return h ? `${h}:${mm}:${ss}` : `${m}:${ss}`;
+  }
+
+  /** "1 vídeo" / "N vídeos". */
+  function formatCount(n?: number): string {
+    if (n === undefined || n === null) return 'N vídeos';
+    return n === 1 ? '1 vídeo' : `${n} vídeos`;
+  }
+
+  const PLATFORM_LABELS: Record<string, string> = {
+    youtube: 'YouTube',
+    tiktok: 'TikTok',
+    twitter: 'X / Twitter',
+    instagram: 'Instagram',
+    facebook: 'Facebook',
+    vimeo: 'Vimeo',
+    twitch: 'Twitch',
+    soundcloud: 'SoundCloud',
+    dailymotion: 'Dailymotion',
+    reddit: 'Reddit',
+    web: 'Web'
+  };
+
+  const platformLabel = (p: string): string => PLATFORM_LABELS[p] || p;
+
+  async function main() {
+    const status = $<HTMLParagraphElement>('status');
+    const form = $<HTMLFormElement>('dl-form');
+    const infoCard = $<HTMLDivElement>('info-card');
+    // Info del último enlace consultado (vídeo o playlist)
+    let currentInfo: LinkInfo | null = null;
+
+    // 1) Verificar sesión (redirige a login si no hay sesión)
+    let me: { user: { id: number; email: string } | null } | null = null;
+    try {
+      const r = await fetch('/api/auth/me', { credentials: 'include' });
+      me = await r.json();
+    } catch {
+      /* sin sesión */
+    }
+    if (!me || !me.user) {
+      location.href = '/login';
+      return;
+    }
+
+    // 2) Buscar metadata del vídeo
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      status.textContent = '';
+      status.classList.remove('error');
+      infoCard.hidden = true;
+
+      const url = $<HTMLInputElement>('url-input').value.trim();
+      if (!url) return;
+      const btn = $<HTMLButtonElement>('btn-fetch');
+      btn.disabled = true;
+      btn.textContent = 'Buscando…';
+
+      try {
+        const res = await fetch('/api/downloader/info', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url }),
+          credentials: 'include'
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.error || 'No se pudo obtener la información.');
+
+        const info = body.info as LinkInfo;
+        currentInfo = info;
+        $<HTMLHeadingElement>('dl-title').textContent = info.title;
+        $<HTMLSpanElement>('dl-badge').textContent = platformLabel(info.platform);
+
+        const thumb = $<HTMLImageElement>('thumb');
+        const plNote = $<HTMLParagraphElement>('pl-note');
+        const dlBtn = $<HTMLButtonElement>('btn-download');
+        if (info.isPlaylist) {
+          // Playlist / canal: se descarga completa y se empaqueta en ZIP
+          thumb.style.display = 'none';
+          thumb.removeAttribute('src');
+          $<HTMLParagraphElement>('dl-extra').textContent = `Playlist de ${formatCount(info.count)}`;
+          plNote.textContent = '📦 Se descargará la playlist completa y se empaquetará en un ZIP.';
+          plNote.hidden = false;
+          dlBtn.textContent = `Descargar playlist (${formatCount(info.count)})`;
+        } else {
+          // Vídeo único
+          $<HTMLParagraphElement>('dl-extra').textContent =
+            [info.uploader && `Por ${info.uploader}`, formatDuration(info.duration) && `Duración ${formatDuration(info.duration)}`]
+              .filter(Boolean)
+              .join(' · ') || '';
+          plNote.hidden = true;
+          thumb.style.display = '';
+          if (info.thumbnail) {
+            thumb.src = info.thumbnail;
+            thumb.alt = info.title;
+          } else {
+            thumb.removeAttribute('src');
+            thumb.alt = '';
+          }
+          dlBtn.textContent = 'Descargar';
+        }
+        infoCard.hidden = false;
+      } catch (err) {
+        status.textContent = errMsg(err);
+        status.classList.add('error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Buscar vídeo';
+      }
+    });
+
+    // 3) Descargar el vídeo/audio
+    $<HTMLButtonElement>('btn-download').addEventListener('click', async () => {
+      const dlStatus = $<HTMLParagraphElement>('dl-status');
+      const result = $<HTMLDivElement>('dl-result');
+      dlStatus.textContent = '';
+      dlStatus.classList.remove('error');
+      result.hidden = true;
+
+      const url = $<HTMLInputElement>('url-input').value.trim();
+      const kind = $<HTMLSelectElement>('kind-select').value;
+      const isPlaylist = currentInfo?.isPlaylist === true;
+      const btn = $<HTMLButtonElement>('btn-download');
+      const resetLabel = isPlaylist
+        ? `Descargar playlist (${formatCount(currentInfo?.count)})`
+        : 'Descargar';
+      btn.disabled = true;
+      btn.textContent = 'Descargando… (puede tardar)';
+
+      try {
+        const res = await fetch('/api/downloader/download', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url, kind, playlist: isPlaylist }),
+          credentials: 'include'
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.error || 'No se pudo descargar.');
+
+        $<HTMLAnchorElement>('dl-link').href = downloadUrl(body.id);
+        result.hidden = false;
+        dlStatus.textContent = body.isPlaylist
+          ? `¡Listo! ZIP con ${formatCount(body.count)}`
+          : '¡Listo!';
+        loadHistory();
+      } catch (err) {
+        dlStatus.textContent = errMsg(err);
+        dlStatus.classList.add('error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = resetLabel;
+      }
+    });
+
+    // 4) Historial
+    await loadHistory();
+  }
+
+  async function loadHistory() {
+    const box = $<HTMLDivElement>('history');
+    const res = await fetch('/api/downloader/history', { credentials: 'include' });
+    if (!res.ok) {
+      box.innerHTML = '<p class="status error">No se pudo cargar el historial.</p>';
+      return;
+    }
+    const { history } = (await res.json()) as { history: Download[] };
+    if (!history.length) {
+      box.innerHTML = '<p class="status">Aún no tienes descargas.</p>';
+      return;
+    }
+    box.innerHTML = `
+      <table class="history-table">
+        <thead>
+          <tr><th>Plataforma</th><th>Vídeo</th><th>Tipo</th><th>Tamaño</th><th class="col-date">Fecha</th><th></th></tr>
+        </thead>
+        <tbody>
+          ${history
+            .map(
+              (h) => `
+                <tr>
+                  <td>${escapeHtml(platformLabel(h.platform))}</td>
+                  <td class="truncate" title="${escapeHtml(h.title)}">${escapeHtml(h.title)}</td>
+                  <td>${h.ext === 'zip' ? '📦 Playlist' : h.kind === 'audio' ? '🎵 Audio' : '🎬 Vídeo'}</td>
+                  <td>${formatSize(h.size)}</td>
+                  <td class="col-date">${new Date(h.created_at).toLocaleString('es')}</td>
+                  <td><a class="btn-download" href="${downloadUrl(h.id)}">Descargar</a></td>
+                </tr>`
+            )
+            .join('')}
+        </tbody>
+      </table>`;
+  }
+
+  main();
+</script>

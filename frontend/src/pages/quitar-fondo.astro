@@ -1,0 +1,149 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Quitar fondo de imagen">
+  <section class="tool">
+    <h1>✨ Quitar fondo de imagen</h1>
+    <p>
+      Elimina el fondo de tus fotos con IA (personas, productos, mascotas…)
+      y obtén una imagen <strong>PNG con fondo transparente</strong>.
+      Esta sección es <strong>exclusiva para usuarios registrados</strong>.
+    </p>
+
+    <form id="bg-form" class="upload-form" autocomplete="off">
+      <label class="field">
+        <span>Elige una imagen (PNG, JPG, WebP…)</span>
+        <input id="file-input" type="file" name="files" accept="image/*" required />
+      </label>
+      <img id="preview" class="bg-preview" alt="Vista previa" hidden />
+      <button type="submit" id="btn-process" class="btn-primary">Quitar fondo</button>
+      <p id="status" class="status" role="status"></p>
+    </form>
+
+    <div id="result" class="bg-result" hidden>
+      <h2>Resultado</h2>
+      <img id="result-img" class="bg-preview" alt="Imagen sin fondo" />
+      <p id="result-status" class="status"></p>
+      <a id="result-link" class="btn-download" href="#">Descargar PNG sin fondo</a>
+    </div>
+  </section>
+</Layout>
+
+<style>
+  .bg-preview {
+    max-width: 100%;
+    max-height: 320px;
+    border-radius: var(--radius);
+    border: 1px dashed var(--muted);
+    margin-top: 0.75rem;
+    background:
+      linear-gradient(45deg, #eee 25%, transparent 25%, transparent 75%, #eee 75%),
+      linear-gradient(45deg, #eee 25%, transparent 25%, transparent 75%, #eee 75%);
+    background-size: 20px 20px;
+    background-position: 0 0, 10px 10px;
+    background-color: #fff;
+  }
+  .bg-result {
+    margin-top: 1rem;
+    background: var(--surface);
+    color: var(--text);
+    border-radius: var(--radius);
+    padding: 1.25rem;
+    box-shadow: var(--shadow);
+  }
+  .bg-result h2 { margin: 0 0 0.5rem; font-size: 1.1rem; }
+  .bg-result .btn-download { display: inline-block; margin-top: 0.5rem; }
+</style>
+
+<script>
+  /** Acceso tipado a elementos del DOM (lanza si no existen). */
+  const $ = <T extends HTMLElement>(id: string): T => {
+    const el = document.getElementById(id);
+    if (!el) throw new Error(`Elemento #${id} no encontrado`);
+    return el as T;
+  };
+
+  /** Mensaje de un error desconocido (catch). */
+  const errMsg = (err: unknown): string =>
+    err instanceof Error ? err.message : 'Error inesperado.';
+
+  async function main() {
+    const status = $<HTMLParagraphElement>('status');
+    const form = $<HTMLFormElement>('bg-form');
+    const fileInput = $<HTMLInputElement>('file-input');
+
+    // 1) Verificar sesión (redirige a login si no hay sesión)
+    let me: { user: { id: number; email: string } | null } | null = null;
+    try {
+      const r = await fetch('/api/auth/me', { credentials: 'include' });
+      me = await r.json();
+    } catch {
+      /* sin sesión */
+    }
+    if (!me || !me.user) {
+      location.href = '/login';
+      return;
+    }
+
+    // 2) Vista previa del original
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files && fileInput.files[0];
+      const preview = $<HTMLImageElement>('preview');
+      if (!file) {
+        preview.hidden = true;
+        preview.removeAttribute('src');
+        return;
+      }
+      preview.src = URL.createObjectURL(file);
+      preview.alt = file.name;
+      preview.hidden = false;
+    });
+
+    // 3) Quitar fondo
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      status.textContent = '';
+      status.classList.remove('error');
+      $<HTMLDivElement>('result').hidden = true;
+
+      const file = fileInput.files && fileInput.files[0];
+      if (!file) {
+        status.textContent = 'Selecciona una imagen primero.';
+        status.classList.add('error');
+        return;
+      }
+
+      const btn = $<HTMLButtonElement>('btn-process');
+      btn.disabled = true;
+      btn.textContent = 'Quitando fondo… (puede tardar unos segundos)';
+
+      try {
+        const fd = new FormData();
+        fd.append('files', file);
+        const res = await fetch('/api/remove-bg', {
+          method: 'POST',
+          body: fd,
+          credentials: 'include'
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.error || 'No se pudo quitar el fondo.');
+
+        const url = `/api/convert/${body.id}/download`;
+        $<HTMLImageElement>('result-img').src = url;
+        $<HTMLAnchorElement>('result-link').href = url;
+        $<HTMLParagraphElement>('result-status').textContent =
+          'Fondo eliminado. Guardado en tu historial.';
+        $<HTMLDivElement>('result').hidden = false;
+      } catch (err) {
+        status.textContent = errMsg(err);
+        status.classList.add('error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Quitar fondo';
+      }
+    });
+  }
+
+  main();
+</script>

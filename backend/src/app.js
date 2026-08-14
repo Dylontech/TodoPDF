@@ -14,6 +14,8 @@ const authRoutes = require('./routes/auth.routes');
 const convertRoutes = require('./routes/convert.routes');
 const historyRoutes = require('./routes/history.routes');
 const pdfToolsRoutes = require('./routes/pdfTools.routes');
+const downloaderRoutes = require('./routes/downloader.routes');
+const removeBgRoutes = require('./routes/removeBg.routes');
 
 const app = express();
 
@@ -69,14 +71,34 @@ const uploadLimiter = rateLimit({
   message: { error: 'Demasiadas peticiones de conversión. Inténtalo más tarde.' }
 });
 
+const downloaderLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiadas descargas. Inténtalo más tarde.' }
+});
+
+const removeBgLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiadas peticiones de eliminación de fondo. Inténtalo más tarde.' }
+});
+
 // ── Rutas ────────────────────────────────────────────────────
+// Salud simple para orquestadores/healthchecks. Se declara ANTES de los
+// routers protegidos: los routers con requireAuth responderían 401 a
+// cualquier /api/* (incluido /api/health) si este llegara después.
+app.get('/api/health', (req, res) => res.json({ ok: true }));
+
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api', uploadLimiter, convertRoutes);
 app.use('/api', uploadLimiter, pdfToolsRoutes);
+app.use('/api', downloaderLimiter, downloaderRoutes);
+app.use('/api', removeBgLimiter, removeBgRoutes);
 app.use('/api', historyRoutes);
-
-// Salud simple para orquestadores/healthchecks
-app.get('/api/health', (req, res) => res.json({ ok: true }));
 
 // ── Errores ──────────────────────────────────────────────────
 app.use(notFound);
