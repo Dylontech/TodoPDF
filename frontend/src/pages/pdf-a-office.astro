@@ -2,13 +2,15 @@
 import Layout from '../layouts/Layout.astro';
 import UploadForm from '../components/UploadForm.astro';
 
-// Formatos de salida admitidos por el backend (PDF → Office)
+// Formatos de salida admitidos por el backend (PDF → Office).
+// - docx/doc/odt: procesadores de texto (import Writer de LibreOffice).
+// - pptx/ppt: presentaciones, una diapositiva por página (imagen).
 const formats = [
   { value: 'docx', label: 'DOCX (Word)' },
   { value: 'doc', label: 'DOC (Word 97)' },
-  { value: 'xlsx', label: 'XLSX (Excel)' },
+  { value: 'odt', label: 'ODT (LibreOffice)' },
   { value: 'pptx', label: 'PPTX (PowerPoint)' },
-  { value: 'odt', label: 'ODT (LibreOffice)' }
+  { value: 'ppt', label: 'PPT (PowerPoint 97)' }
 ];
 ---
 
@@ -16,9 +18,9 @@ const formats = [
   <section class="tool">
     <h1>PDF → Office</h1>
     <p>
-      Convierte tu PDF en un documento editable de Word, Excel, PowerPoint u ODT.
-      La conversión es «best effort»: el layout puede variar respecto al PDF,
-      especialmente en XLSX y PPTX.
+      Convierte tu PDF en un documento editable de Word, PowerPoint u ODT.
+      En PPTX/PPT cada página del PDF se convierte en una diapositiva.
+      La conversión es «best effort»: el layout puede variar respecto al PDF.
     </p>
     <UploadForm
       endpoint="/api/convert/pdf-to-office"

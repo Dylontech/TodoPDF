@@ -12,12 +12,15 @@ Aplicación web **autoalojada** estilo iLovePDF con un enfoque estricto en la **
 | ------------------ | ----------------------------------------- | ------------------------------------- |
 | PDF → Imágenes     | Ghostscript por pipes, ZIP en memoria     | Guarda JPG/PNG… en volumen + historial |
 | Imágenes → PDF     | sharp + pdf-lib en Buffers, PDF en memoria | Guarda PDF en volumen + historial      |
+| PDF → Office (DOCX/DOC/ODT/PPTX/PPT) | LibreOffice + pptxgenjs en temp aislado | Guarda documento en volumen + historial |
+| Office → PDF (DOCX/DOC/XLSX/PPTX/PPT/ODT) | LibreOffice en temp aislado | Guarda PDF en volumen + historial |
 
 ## Flujos de privacidad
 
-1. **Usuarios invitados:** todo el procesamiento ocurre estrictamente en **memoria RAM** (Buffers).
-   Ghostscript recibe el PDF por **STDIN** y devuelve las imágenes por **STDOUT**; nunca se escribe en disco.
-   Al enviar la respuesta, las referencias se liberan y el GC recupera la memoria.
+1. **Usuarios invitados:** el procesamiento de PDF ↔ imágenes ocurre estrictamente en **memoria RAM**
+   (Buffers; Ghostscript por STDIN/STDOUT, nada toca el disco). Las herramientas de **Office** requieren
+   que LibreOffice escriba archivos de trabajo, por lo que usan un **directorio temporal aislado por
+   conversión** que se elimina SIEMPRE al terminar (éxito o error). No persiste nada para invitados.
 2. **Usuarios autenticados:** los archivos se procesan, se guardan en un **volumen del servidor**
    (`uploads`) y cada conversión se registra en el **historial** de la base de datos (Knex).
 
@@ -61,10 +64,12 @@ docker compose down -v       # ELIMINA volúmenes (datos)
 | GET    | `/api/auth/me`                   | Devuelve el usuario actual (o 401)                |
 | POST   | `/api/convert/pdf-to-images`     | `multipart` campo `files` (1) + `format` + `quality` |
 | POST   | `/api/convert/images-to-pdf`     | `multipart` campo `files` (hasta 10)              |
+| POST   | `/api/convert/pdf-to-office`     | `multipart` campo `files` (1) + `format` (`docx`\|`doc`\|`odt`\|`pptx`\|`ppt`) |
+| POST   | `/api/convert/office-to-pdf`     | `multipart` campo `files` (1): DOCX/DOC/XLSX/PPTX/PPT/ODT |
 | GET    | `/api/convert/:id/download`      | Descarga una conversión guardada (solo dueño)     |
 | GET    | `/api/history`                   | Historial de conversiones del usuario (solo auth) |
 
-> Invitado: los endpoints de conversión devuelven el archivo (ZIP/JPG/PDF) directamente.
+> Invitado: los endpoints de conversión devuelven el archivo (ZIP/JPG/PDF/Office) directamente.
 > Autenticado: devuelven `{ id, ... }`; descarga vía `/api/convert/:id/download`.
 
 ## Migraciones
@@ -78,6 +83,7 @@ cd backend && npm install && npm run migrate
 ## Seguridad incluida (MVP)
 
 - Ghostscript siempre con `-dSAFER` (sandbox), timeout y límites de páginas/tamaño (anti-DoS).
+- LibreOffice en modo headless con **timeout** y perfil de usuario aislado por conversión (anti-DoS).
 - Validación de **magic bytes** (`file-type`): no se confía en la extensión.
 - Límites de subida diferenciados (invitado vs autenticado) + `express-rate-limit`.
 - `helmet`, cookies `httpOnly`/`sameSite=lax`, contraseñas con `bcrypt`.

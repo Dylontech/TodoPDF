@@ -4,7 +4,9 @@
 #   ghostscript        → rasterizar PDF → imágenes (flujo en RAM por pipes)
 #   imagemagick        → utilidad adicional de imágenes (fallback)
 #   poppler-utils      → utilidades PDF (pdfinfo, pdftoppm, ...)
-#   libreoffice-writer → conversión PDF ↔ Office (DOCX/DOC/XLSX/PPTX/ODT)
+#   libreoffice-writer → conversión PDF ↔ Office (DOCX/DOC/ODT; importa PDF)
+#   libreoffice-calc   → conversión XLSX ↔ PDF (Office → PDF)
+#   libreoffice-impress→ conversión PPTX/PPT ↔ PDF (Office → PDF)
 #   font-noto*         → tipografías para un PDF/Office legible (sin ellas
 #                        LibreOffice usa una fuente genérica muy pobre)
 #   tini               → init ligero: manejo correcto de señales/SIGTERM
@@ -12,7 +14,8 @@
 FROM node:22-alpine
 
 RUN apk add --no-cache ghostscript imagemagick poppler-utils tini \
-    libreoffice-writer font-noto font-noto-cjk \
+    libreoffice-writer libreoffice-calc libreoffice-impress \
+    font-noto font-noto-cjk \
     && addgroup -S todopdf \
     && adduser -S todopdf -G todopdf
 

@@ -3,11 +3,14 @@
 const path = require('node:path');
 const fs = require('node:fs/promises');
 const { pathToFileURL } = require('node:url');
+const sharp = require('sharp');
+const pptxgen = require('pptxgenjs');
 
 const config = require('../../config');
 const { detectFileType } = require('../../utils/files');
 const { httpError } = require('../../utils/errors');
 const { runCommand } = require('../../utils/exec');
+const { pdfToImages } = require('./pdfToImages');
 
 /**
  * ─────────────────────────────────────────────────────────────
@@ -22,32 +25,23 @@ const { runCommand } = require('../../utils/exec');
  */
 
 /**
- * Formatos de salida admitidos en PDF → Office, con su filtro LibreOffice.
- * El PDF se importa siempre con el filtro de Writer (writer_pdf_import) y se
- * re-exporta al formato elegido. XLSX/PPTX son "best effort": el texto se
- * vuelca a celdas/diapositivas y el layout puede no respetarse al 100%.
+ * Formatos de salida admitidos en PDF → Office.
+ *
+ * - mode 'writer' (docx/doc/odt): LibreOffice importa el PDF con el filtro de
+ *   Writer (writer_pdf_import) y lo re-exporta. Exportar un documento Writer a
+ *   XLSX/PPTX hace que LibreOffice aborte (SIGABRT, código 134), por eso los
+ *   formatos de presentación usan otra ruta.
+ * - mode 'slides' (pptx): la página se rasteriza a PNG y se embebe como
+ *   diapositiva con pptxgenjs (ruta fiable para presentaciones).
+ * - mode 'slides-ppt' (ppt): PPTX generado y reconvertido a PPT binario con
+ *   LibreOffice (Impress → Impress, que sí funciona).
  */
 const PDF_TARGET_FORMATS = {
-  docx: {
-    filter: 'MS Word 2007 XML',
-    mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-  },
-  doc: {
-    filter: 'MS Word 97',
-    mime: 'application/msword'
-  },
-  xlsx: {
-    filter: 'Calc MS Excel 2007 XML',
-    mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-  },
-  pptx: {
-    filter: 'Impress MS PowerPoint 2007 XML',
-    mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
-  },
-  odt: {
-    filter: 'writer8',
-    mime: 'application/vnd.oasis.opendocument.text'
-  }
+  docx: { mode: 'writer', filter: 'MS Word 2007 XML', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
+  doc: { mode: 'writer', filter: 'MS Word 97', mime: 'application/msword' },
+  odt: { mode: 'writer', filter: 'writer8', mime: 'application/vnd.oasis.opendocument.text' },
+  pptx: { mode: 'slides', mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' },
+  ppt: { mode: 'slides-ppt', mime: 'application/vnd.ms-powerpoint' }
 };
 
 /** MIME de un formato de Office de salida (para el Content-Type de respuesta). */
@@ -56,10 +50,12 @@ function mimeForOffice(ext) {
 }
 
 /**
- * Convierte un PDF → documento de Office (DOCX/DOC/XLSX/PPTX/ODT).
+ * Convierte un PDF → documento de Office.
+ * Formatos de salida: docx/doc/odt (procesador de textos vía LibreOffice Writer)
+ * y pptx/ppt (presentaciones: una diapositiva por página con la página como imagen).
  *
  * @param {Buffer} pdfBuffer Contenido del PDF en memoria.
- * @param {string} targetExt Formato de salida (docx|doc|xlsx|pptx|odt).
+ * @param {string} targetExt Formato de salida (docx|doc|odt|pptx|ppt).
  * @returns {Promise<Buffer>} El documento Office convertido.
  */
 async function pdfToOffice(pdfBuffer, targetExt) {
@@ -71,6 +67,11 @@ async function pdfToOffice(pdfBuffer, targetExt) {
     throw httpError(400, 'El archivo debe ser un PDF válido.');
   }
 
+  // Presentaciones: diapositiva por página (ruta con imágenes, no Writer)
+  if (fmt.mode === 'slides') return pdfToPptx(pdfBuffer);
+  if (fmt.mode === 'slides-ppt') return pdfToPpt(pdfBuffer);
+
+  // Procesadores de texto (docx/doc/odt): import Writer + export del filtro
   return runSoffice({
     input: pdfBuffer,
     inputName: 'input.pdf',
@@ -108,7 +109,10 @@ async function officeToPdf(officeBuffer) {
 function extensionForMime(mime) {
   const map = {
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+    // Los .doc son contenedores CFB/OLE2; file-type los reporta así (según build)
     'application/msword': 'doc',
+    'application/x-cfb': 'doc',
+    'application/x-ole-storage': 'doc',
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
     'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
     'application/vnd.oasis.opendocument.text': 'odt'
@@ -143,7 +147,9 @@ async function runSoffice({ input, inputName, infilter, convertTo, outputName })
       '--convert-to', convertTo,
       '--outdir', workDir
     ];
-    if (infilter) args.push('--infilter', infilter);
+    // --infilter debe ir como argumento único (--infilter=<filtro>),
+    // no como dos tokens separados (LibreOffice lo rechaza).
+    if (infilter) args.push(`--infilter=${infilter}`);
     args.push(inputPath);
 
     // stdin no se usa: LibreOffice lee el archivo del directorio de trabajo.
@@ -162,6 +168,66 @@ async function runSoffice({ input, inputName, infilter, convertTo, outputName })
   } finally {
     await fs.rm(workDir, { recursive: true, force: true }).catch(() => {});
   }
+}
+
+/**
+ * Convierte PDF → PPTX generando una diapositiva por página, con la página
+ * rasterizada como imagen a pantalla completa. Usa Ghostscript (reutiliza
+ * pdfToImages) + pptxgenjs, porque LibreOffice no puede exportar Writer→PPTX.
+ *
+ * @param {Buffer} pdfBuffer Contenido del PDF en memoria.
+ * @returns {Promise<Buffer>} PPTX (una imagen por diapositiva).
+ */
+async function pdfToPptx(pdfBuffer) {
+  // Rasteriza cada página a PNG en RAM (valida magic bytes y maxPages)
+  const pages = await pdfToImages(pdfBuffer, { format: 'png' });
+  if (pages.length === 0) throw httpError(400, 'El PDF no tiene páginas.');
+
+  try {
+    const pres = new pptxgen();
+
+    // Lienzo ajustado al aspecto de la primera página (evita distorsión)
+    const meta = await sharp(pages[0]).metadata();
+    const ratio = (meta.width || 1000) / (meta.height || 1000);
+    let w = 10;
+    let h = w / ratio;
+    if (h > 7.5) { h = 7.5; w = h * ratio; }
+    pres.defineLayout({ name: 'PDF', width: w, height: h });
+    pres.layout = 'PDF';
+
+    for (const page of pages) {
+      const slide = pres.addSlide();
+      slide.background = { color: 'FFFFFF' };
+      slide.addImage({
+        data: `data:image/png;base64,${page.toString('base64')}`,
+        x: 0, y: 0, w, h,
+        sizing: { type: 'contain', w, h }
+      });
+    }
+
+    // Nota: pres.stream() usa nodebuffer (jszip). write('buffer') pasa el tipo
+    // literal 'buffer' a jszip y falla ("buffer is not supported by this platform").
+    const out = await pres.stream();
+    return Buffer.isBuffer(out) ? out : Buffer.from(out);
+  } finally {
+    pages.length = 0; // libera las imágenes para el GC antes de finalizar
+  }
+}
+
+/**
+ * Convierte PDF → PPT (formato binario antiguo): genera el PPTX con una
+ * diapositiva por página y lo reconvierte a .ppt con LibreOffice
+ * (Impress → Impress, que sí es fiable).
+ */
+async function pdfToPpt(pdfBuffer) {
+  const pptx = await pdfToPptx(pdfBuffer);
+  return runSoffice({
+    input: pptx,
+    inputName: 'input.pptx',
+    infilter: null,
+    convertTo: 'ppt:MS PowerPoint 97',
+    outputName: 'input.ppt'
+  });
 }
 
 module.exports = { pdfToOffice, officeToPdf, mimeForOffice, PDF_TARGET_FORMATS };
