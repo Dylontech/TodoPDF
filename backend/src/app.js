@@ -13,6 +13,7 @@ const { notFound, errorHandler } = require('./middleware/errorHandler');
 const authRoutes = require('./routes/auth.routes');
 const convertRoutes = require('./routes/convert.routes');
 const historyRoutes = require('./routes/history.routes');
+const pdfToolsRoutes = require('./routes/pdfTools.routes');
 
 const app = express();
 
@@ -71,6 +72,7 @@ const uploadLimiter = rateLimit({
 // ── Rutas ────────────────────────────────────────────────────
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api', uploadLimiter, convertRoutes);
+app.use('/api', uploadLimiter, pdfToolsRoutes);
 app.use('/api', historyRoutes);
 
 // Salud simple para orquestadores/healthchecks

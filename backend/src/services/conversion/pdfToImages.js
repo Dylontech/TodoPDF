@@ -5,6 +5,7 @@ const config = require('../../config');
 const { detectFileType } = require('../../utils/files');
 const { httpError } = require('../../utils/errors');
 const { runCommand } = require('../../utils/exec');
+const { countPages } = require('./pdfUtils');
 
 /**
  * ─────────────────────────────────────────────────────────────
@@ -62,17 +63,6 @@ function mimeFor(format) {
     webp: 'image/webp', tiff: 'image/tiff', bmp: 'image/bmp', gif: 'image/gif'
   };
   return map[format.toLowerCase().replace('.', '')] || 'application/octet-stream';
-}
-
-/**
- * Cuenta las páginas del PDF leyendo desde stdin (sin tocar disco).
- * Usa `pdfinfo` (poppler-utils, instalado en el Dockerfile) con entrada por stdin.
- */
-async function countPages(pdfBuffer) {
-  const { stdout } = await runCommand('pdfinfo', ['-'], pdfBuffer, { timeoutMs: 15_000 });
-  const match = stdout.toString().match(/^Pages:\s+(\d+)/im);
-  if (!match) throw httpError(400, 'No se pudo leer el número de páginas del PDF.');
-  return parseInt(match[1], 10);
 }
 
 /**

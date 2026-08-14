@@ -13,6 +13,7 @@ const officeService = require('../services/conversion/office');
 const storage = require('../services/storageService');
 const { httpError } = require('../utils/errors');
 const { sanitizeFilename } = require('../utils/files');
+const { sendSingleFile, sendZip } = require('../utils/response');
 
 /**
  * Controlador de conversiones.
@@ -59,28 +60,6 @@ function normalizeFormat(value, allowed) {
   return fmt;
 }
 
-/** Envía un archivo directo (una sola imagen). */
-function sendSingleImage(res, buffer, baseName, ext) {
-  res.setHeader('Content-Type', mimeFor(ext));
-  res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(baseName)}.${ext}"`);
-  res.send(buffer);
-}
-
-/** Envía un ZIP construido en memoria (archiver → stream a la respuesta). */
-function sendZip(res, buffers, baseName, ext) {
-  const archive = archiver('zip', { zlib: { level: 6 } });
-  archive.on('error', (err) => res.destroy(err));
-
-  buffers.forEach((buf, i) => {
-    archive.append(buf, { name: `${baseName}-pagina-${String(i + 1).padStart(2, '0')}.${ext}` });
-  });
-
-  res.setHeader('Content-Type', 'application/zip');
-  res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(baseName)}.zip"`);
-  archive.pipe(res);
-  archive.finalize();
-}
-
 /** Elimina los temporales de subida (solo existen en el flujo autenticado). */
 async function cleanupUploads(req) {
   await storage.cleanupTempFiles(req.files || []);
@@ -123,10 +102,10 @@ async function convertPdfToImages(req, res, next) {
     const ext = extensionFor(format);
     if (images.length === 1) {
       // Una sola página → imagen directa
-      sendSingleImage(res, images[0], base, ext);
+      sendSingleFile(res, images[0], `${base}.${ext}`, mimeFor(ext));
     } else {
       // Varias páginas → ZIP en memoria
-      sendZip(res, images, base, ext);
+      sendZip(res, { buffers: images, baseName: base, ext, prefix: 'pagina' });
     }
     images.length = 0; // permite al GC liberar antes de finalizar la petición
   } catch (err) {

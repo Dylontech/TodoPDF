@@ -6,13 +6,34 @@
 //   multiple        → admite varios archivos
 //   formatSelector  → muestra selector de formato de salida
 //   formats         → [{ value, label }] para el selector
+//   fields          → [{ name, label, type, options?, placeholder?, default?, min?, step?, dependsOn? }]
+//   secondaryFiles  → [{ field, label, accept }] (inputs de archivo extra)
+//   submitLabel     → texto del botón
+
+import type { Field, FieldOption, SecondaryFile } from '../lib/formTypes';
+
+interface Props {
+  endpoint: string;
+  accept: string;
+  multiple?: boolean;
+  formatSelector?: boolean;
+  formats?: FieldOption[];
+  fields?: Field[];
+  secondaryFiles?: SecondaryFile[];
+  submitLabel?: string;
+}
 
 const {
   endpoint,
   accept,
   multiple = false,
   formatSelector = false,
-  formats = []
+  formats = [],
+  // Campos adicionales (texto/número/select/radio) que se envían al endpoint.
+  fields = [],
+  // Inputs de archivo adicionales con nombre propio (p. ej. Insertar páginas: campo 'insert').
+  secondaryFiles = [],
+  submitLabel = 'Convertir'
 } = Astro.props;
 ---
 
@@ -32,13 +53,69 @@ const {
     </label>
   )}
 
-  <button type="submit" id="submit-btn" class="btn-primary">Convertir</button>
+  {secondaryFiles.length > 0 && secondaryFiles.map((sf) => (
+    <label class="field">
+      <span>{sf.label}</span>
+      <input type="file" id={`file-${sf.field}`} accept={sf.accept} />
+    </label>
+  ))}
+
+  {fields.length > 0 && (
+    <div class="fields">
+      {fields.map((f) => (
+        <div
+          class="field"
+          data-field-group={f.name}
+          data-depends-on={f.dependsOn ? `${f.dependsOn.field}:${f.dependsOn.value}` : ''}
+        >
+          {f.type === 'radio' ? (
+            <fieldset class="radio-group">
+              <legend>{f.label}</legend>
+              {f.options?.map((o) => (
+                <label class="radio">
+                  <input
+                    type="radio"
+                    name={f.name}
+                    value={o.value}
+                    checked={o.value === (f.default || f.options?.[0]?.value)}
+                  />
+                  <span>{o.label}</span>
+                </label>
+              ))}
+            </fieldset>
+          ) : (
+            <>
+              <span>{f.label}</span>
+              {f.type === 'select' ? (
+                <select name={f.name}>
+                  {f.options?.map((o) => (
+                    <option value={o.value} selected={o.value === f.default}>{o.label}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type={f.type === 'number' ? 'number' : 'text'}
+                  name={f.name}
+                  placeholder={f.placeholder}
+                  value={f.default || ''}
+                  min={f.min}
+                  step={f.step}
+                />
+              )}
+            </>
+          )}
+        </div>
+      ))}
+    </div>
+  )}
+
+  <button type="submit" id="submit-btn" class="btn-primary">{submitLabel}</button>
   <p id="status" class="status" role="status"></p>
 </form>
 
 <div id="result" class="result" hidden></div>
 
-<script define:vars={{ endpoint, formatSelector }}>
+<script define:vars={{ endpoint, formatSelector, fields, secondaryFiles }}>
   const form = document.getElementById('upload-form');
   const input = document.getElementById('file-input');
   const dropzone = document.getElementById('dropzone');
@@ -86,6 +163,23 @@ const {
     try {
       const fd = new FormData();
       files.forEach((f) => fd.append('files', f));
+
+      // Archivos adicionales (p. ej. PDF a insertar).
+      secondaryFiles.forEach((sf) => {
+        const inp = document.getElementById(`file-${sf.field}`);
+        if (inp && inp.files.length) {
+          for (const f of inp.files) fd.append(sf.field, f);
+        }
+      });
+
+      // Campos adicionales (texto/número/select/radio).
+      fields.forEach((f) => {
+        const sel = f.type === 'radio'
+          ? document.querySelector(`input[name="${f.name}"]:checked`)
+          : document.querySelector(`[name="${f.name}"]`);
+        if (sel && sel.value !== '') fd.append(f.name, sel.value);
+      });
+
       if (formatSelector) fd.append('format', document.getElementById('format').value);
 
       const res = await fetch(endpoint, { method: 'POST', body: fd, credentials: 'include' });
@@ -139,4 +233,22 @@ const {
     const m = header.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
     return m ? decodeURIComponent(m[1]) : null;
   }
+
+  // ── Campos condicionales (mostrar/ocultar según dependencia) ──
+  function syncDepends() {
+    document.querySelectorAll('[data-field-group]').forEach((group) => {
+      const dep = group.dataset.dependsOn; // formato "campo:valor"
+      if (!dep) return;
+      const [name, value] = dep.split(':');
+      const el = document.querySelector(`[name="${name}"]`);
+      let active = false;
+      if (el) {
+        active = el.type === 'radio' ? el.checked && el.value === value : el.value === value;
+      }
+      group.hidden = !active;
+      group.querySelectorAll('input, select').forEach((inp) => { inp.disabled = !active; });
+    });
+  }
+  document.querySelectorAll('[name]').forEach((el) => el.addEventListener('change', syncDepends));
+  syncDepends();
 </script>

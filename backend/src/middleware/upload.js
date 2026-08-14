@@ -58,4 +58,20 @@ function uploadFiles(field = 'files', maxFiles = 10) {
   };
 }
 
-module.exports = { memoryUpload, diskUpload, uploadFiles };
+/**
+ * Subida con varios campos multipart con nombre (p. ej. Insertar páginas:
+ * campos `files` + `insert`). Elige la estrategia según la sesión, igual
+ * que uploadFiles.
+ *
+ * @param {Array<{ name: string, maxCount: number }>} specs
+ */
+function uploadFields(specs) {
+  return (req, res, next) => {
+    const middleware = req.session && req.session.userId
+      ? diskUpload.fields(specs)
+      : memoryUpload.fields(specs);
+    middleware(req, res, next);
+  };
+}
+
+module.exports = { memoryUpload, diskUpload, uploadFiles, uploadFields };

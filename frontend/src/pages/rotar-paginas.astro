@@ -1,0 +1,36 @@
+---
+import Layout from '../layouts/Layout.astro';
+import UploadForm from '../components/UploadForm.astro';
+import type { Field } from '../lib/formTypes';
+
+const fields: Field[] = [
+  {
+    name: 'degrees',
+    label: 'Rotación',
+    type: 'select',
+    default: '90',
+    options: [
+      { value: '90', label: '90° (sentido horario)' },
+      { value: '180', label: '180°' },
+      { value: '270', label: '270°' }
+    ]
+  },
+  { name: 'pages', label: 'Páginas (vacío = todas, ej. 2,5-8)', type: 'text', placeholder: '2,5-8' }
+];
+---
+
+<Layout title="Rotar páginas">
+  <section class="tool">
+    <h1>Rotar páginas</h1>
+    <p>
+      Rota todas las páginas de tu PDF o solo las que indiques (90°, 180° o 270°).
+      Si no escribes ninguna página, se rotará el documento completo.
+    </p>
+    <UploadForm
+      endpoint="/api/convert/pdf-rotate"
+      accept="application/pdf"
+      fields={fields}
+      submitLabel="Rotar"
+    />
+  </section>
+</Layout>

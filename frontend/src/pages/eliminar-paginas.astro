@@ -1,0 +1,25 @@
+---
+import Layout from '../layouts/Layout.astro';
+import UploadForm from '../components/UploadForm.astro';
+import type { Field } from '../lib/formTypes';
+
+const fields: Field[] = [
+  { name: 'pages', label: 'Páginas a eliminar (ej. 2,4-6)', type: 'text', placeholder: '2,4-6' }
+];
+---
+
+<Layout title="Eliminar páginas">
+  <section class="tool">
+    <h1>Eliminar páginas</h1>
+    <p>
+      Elimina las páginas que no necesites de tu PDF. Indícalas separadas por
+      comas; también admite rangos (ej. 2,4-6). No se puede eliminar el PDF entero.
+    </p>
+    <UploadForm
+      endpoint="/api/convert/pdf-delete"
+      accept="application/pdf"
+      fields={fields}
+      submitLabel="Eliminar"
+    />
+  </section>
+</Layout>

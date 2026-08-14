@@ -1,0 +1,42 @@
+---
+import Layout from '../layouts/Layout.astro';
+import UploadForm from '../components/UploadForm.astro';
+import type { Field } from '../lib/formTypes';
+
+// PDF base (campo 'files') + PDF a insertar (campo 'insert').
+const fields: Field[] = [
+  {
+    name: 'position',
+    label: 'Posición de inserción',
+    type: 'select',
+    default: 'end',
+    options: [
+      { value: 'start', label: 'Al inicio' },
+      { value: 'end', label: 'Al final' },
+      { value: 'after', label: 'Después de la página…' }
+    ]
+  },
+  { name: 'after', label: 'Después de la página N', type: 'number', min: 1, default: 1, dependsOn: { field: 'position', value: 'after' } }
+];
+
+const secondaryFiles = [
+  { field: 'insert', label: 'PDF cuyas páginas se insertan', accept: 'application/pdf' }
+];
+---
+
+<Layout title="Insertar páginas">
+  <section class="tool">
+    <h1>Insertar páginas</h1>
+    <p>
+      Inserta las páginas de un PDF dentro de otro, al inicio, al final o después
+      de una página concreta.
+    </p>
+    <UploadForm
+      endpoint="/api/convert/pdf-insert"
+      accept="application/pdf"
+      fields={fields}
+      secondaryFiles={secondaryFiles}
+      submitLabel="Insertar"
+    />
+  </section>
+</Layout>

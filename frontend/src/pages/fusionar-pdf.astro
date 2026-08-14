@@ -1,0 +1,20 @@
+---
+import Layout from '../layouts/Layout.astro';
+import UploadForm from '../components/UploadForm.astro';
+---
+
+<Layout title="Fusionar PDF">
+  <section class="tool">
+    <h1>Fusionar PDF</h1>
+    <p>
+      Combina varios PDFs en uno solo. El orden final será el orden de subida de
+      los archivos (sube el primero que quieras que aparezca).
+    </p>
+    <UploadForm
+      endpoint="/api/convert/pdf-merge"
+      accept="application/pdf"
+      multiple={true}
+      submitLabel="Fusionar"
+    />
+  </section>
+</Layout>

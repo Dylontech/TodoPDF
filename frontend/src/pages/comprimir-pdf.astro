@@ -1,0 +1,35 @@
+---
+import Layout from '../layouts/Layout.astro';
+import UploadForm from '../components/UploadForm.astro';
+import type { Field } from '../lib/formTypes';
+
+const fields: Field[] = [
+  {
+    name: 'profile',
+    label: 'Perfil de compresión',
+    type: 'select',
+    default: 'ebook',
+    options: [
+      { value: 'screen', label: 'Pantalla — máxima compresión' },
+      { value: 'ebook', label: 'eBook — recomendado' },
+      { value: 'printer', label: 'Impresora — mejor calidad' }
+    ]
+  }
+];
+---
+
+<Layout title="Comprimir PDF">
+  <section class="tool">
+    <h1>Comprimir PDF</h1>
+    <p>
+      Reduce el peso de tu PDF eligiendo un perfil de calidad. Todo se procesa en
+      memoria y recibes el archivo comprimido directamente.
+    </p>
+    <UploadForm
+      endpoint="/api/convert/pdf-compress"
+      accept="application/pdf"
+      fields={fields}
+      submitLabel="Comprimir"
+    />
+  </section>
+</Layout>

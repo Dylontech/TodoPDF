@@ -1,0 +1,212 @@
+---
+// Formulario de "Organizar páginas".
+// Flujo en 2 pasos:
+//   1) Sube el PDF → POST /api/convert/pdf-info devuelve el nº de páginas.
+//   2) Reordena la lista (drag & drop nativo + flechas) → POST pdf-organize con el orden.
+const { endpoint = '/api/convert/pdf-organize', infoEndpoint = '/api/convert/pdf-info' } = Astro.props;
+---
+
+<form id="organize-form" class="upload-form">
+  <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Subir PDF">
+    <input type="file" id="file-input" accept="application/pdf" hidden />
+    <p class="dropzone-hint">Arrastra tu PDF aquí o haz clic para elegirlo</p>
+    <p id="file-info" class="file-info"></p>
+  </div>
+
+  <div id="pages-panel" class="pages-panel" hidden>
+    <p class="pages-hint">Arrastra cada página para reordenarla o usa las flechas. Orden actual:</p>
+    <ol id="page-list" class="page-list"></ol>
+    <button type="button" id="btn-reverse" class="btn-outline">Invertir orden</button>
+  </div>
+
+  <button type="submit" id="submit-btn" class="btn-primary" disabled>Organizar</button>
+  <p id="status" class="status" role="status"></p>
+</form>
+
+<div id="result" class="result" hidden></div>
+
+<script define:vars={{ endpoint, infoEndpoint }}>
+  const form = document.getElementById('organize-form');
+  const input = document.getElementById('file-input');
+  const dropzone = document.getElementById('dropzone');
+  const info = document.getElementById('file-info');
+  const statusEl = document.getElementById('status');
+  const submitBtn = document.getElementById('submit-btn');
+  const result = document.getElementById('result');
+  const panel = document.getElementById('pages-panel');
+  const list = document.getElementById('page-list');
+
+  let order = [];       // números de página actuales, en orden de presentación
+  let draggingIdx = -1;
+
+  // ── Selección del archivo ──────────────────────────────────
+  dropzone.addEventListener('click', () => input.click());
+  dropzone.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); }
+  });
+  ['dragover', 'dragenter'].forEach((ev) =>
+    dropzone.addEventListener(ev, (e) => { e.preventDefault(); dropzone.classList.add('dragging'); })
+  );
+  ['dragleave', 'drop'].forEach((ev) =>
+    dropzone.addEventListener(ev, (e) => { e.preventDefault(); dropzone.classList.remove('dragging'); })
+  );
+  dropzone.addEventListener('drop', (e) => {
+    if (e.dataTransfer?.files?.length) { input.files = e.dataTransfer.files; onFile(); }
+  });
+  input.addEventListener('change', onFile);
+
+  async function onFile() {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    info.textContent = `${file.name} (${(file.size / 1048576).toFixed(2)} MB)`;
+    setStatus('Analizando páginas…');
+    submitBtn.disabled = true;
+    panel.hidden = true;
+    try {
+      const fd = new FormData();
+      fd.append('files', file);
+      const res = await fetch(infoEndpoint, { method: 'POST', body: fd, credentials: 'include' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Error ${res.status}`);
+      }
+      const data = await res.json();
+      const n = Math.max(1, Number(data.pages) || 1);
+      order = Array.from({ length: n }, (_, i) => i + 1);
+      renderList();
+      panel.hidden = false;
+      submitBtn.disabled = false;
+      setStatus(`PDF con ${n} páginas. Reordénalas y pulsa Organizar.`);
+    } catch (err) {
+      setStatus(err.message || 'No se pudo analizar el PDF.', true);
+    }
+  }
+
+  // ── Lista reordenable (drag & drop nativo + flechas) ───────
+  function renderList() {
+    list.innerHTML = '';
+    order.forEach((page, i) => {
+      const li = document.createElement('li');
+      li.className = 'page-chip';
+      li.draggable = true;
+      li.dataset.pos = String(i);
+
+      const label = document.createElement('span');
+      label.className = 'page-label';
+      label.textContent = `Página ${page}`;
+
+      const up = mkBtn('↑', () => move(i, -1), 'Subir');
+      const down = mkBtn('↓', () => move(i, 1), 'Bajar');
+
+      li.append(label, up, down);
+
+      li.addEventListener('dragstart', (e) => {
+        draggingIdx = i;
+        li.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', String(i));
+      });
+      li.addEventListener('dragend', () => li.classList.remove('dragging'));
+      li.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        li.classList.add('drag-over');
+      });
+      li.addEventListener('dragleave', () => li.classList.remove('drag-over'));
+      li.addEventListener('drop', (e) => {
+        e.preventDefault();
+        li.classList.remove('drag-over');
+        if (draggingIdx < 0 || draggingIdx === i) return;
+        reorder(draggingIdx, i);
+        draggingIdx = -1;
+      });
+
+      list.appendChild(li);
+    });
+  }
+
+  function mkBtn(text, fn, title) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'chip-btn';
+    b.textContent = text;
+    b.title = title;
+    b.addEventListener('click', fn);
+    return b;
+  }
+
+  function move(i, delta) {
+    const j = i + delta;
+    if (j < 0 || j >= order.length) return;
+    [order[i], order[j]] = [order[j], order[i]];
+    renderList();
+  }
+
+  function reorder(from, to) {
+    const [item] = order.splice(from, 1);
+    order.splice(to, 0, item);
+    renderList();
+  }
+
+  document.getElementById('btn-reverse').addEventListener('click', () => {
+    order.reverse();
+    renderList();
+  });
+
+  // ── Envío ──────────────────────────────────────────────────
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const file = input.files && input.files[0];
+    if (!file) { setStatus('Selecciona un archivo PDF.', true); return; }
+    if (order.length === 0) { setStatus('No hay páginas que ordenar.', true); return; }
+
+    setStatus('Organizando…');
+    submitBtn.disabled = true;
+    try {
+      const fd = new FormData();
+      fd.append('files', file);
+      fd.append('order', order.join(','));
+      const res = await fetch(endpoint, { method: 'POST', body: fd, credentials: 'include' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Error ${res.status}`);
+      }
+      const ctype = res.headers.get('content-type') || '';
+      if (ctype.includes('application/json')) {
+        const data = await res.json();
+        showResultLink(`/api/convert/${data.id}/download`, 'Descargar resultado');
+        setStatus('Conversión guardada en tu historial.');
+      } else {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const name = filenameFromDisposition(res.headers.get('content-disposition')) || 'reordenado.pdf';
+        showResultLink(url, name, true);
+        setStatus('¡Listo!');
+      }
+    } catch (err) {
+      setStatus(err.message || 'Error al organizar.', true);
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+
+  // ── Helpers de UI ──────────────────────────────────────────
+  function setStatus(msg, isError = false) {
+    statusEl.textContent = msg;
+    statusEl.classList.toggle('error', isError);
+  }
+  function showResultLink(url, label, download = false) {
+    result.innerHTML = '';
+    result.hidden = false;
+    const a = document.createElement('a');
+    a.href = url;
+    a.className = 'btn-download';
+    a.textContent = `⬇ ${label}`;
+    if (download) a.setAttribute('download', label);
+    result.appendChild(a);
+  }
+  function filenameFromDisposition(header) {
+    if (!header) return null;
+    const m = header.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
+    return m ? decodeURIComponent(m[1]) : null;
+  }
+</script>
