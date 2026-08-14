@@ -1,0 +1,50 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Registrarse">
+  <section class="auth-card">
+    <h1>Crear cuenta</h1>
+    <p>Regístrate para guardar tus conversiones en el servidor y consultar el historial.</p>
+
+    <form id="register-form">
+      <label class="field">
+        <span>Email</span>
+        <input type="email" name="email" required autocomplete="email" />
+      </label>
+      <label class="field">
+        <span>Contraseña (mínimo 8 caracteres)</span>
+        <input type="password" name="password" minlength="8" required autocomplete="new-password" />
+      </label>
+      <button type="submit" class="btn-primary">Crear cuenta</button>
+      <p id="status" class="status" role="status"></p>
+    </form>
+
+    <p class="auth-alt">¿Ya tienes cuenta? <a href="/login">Inicia sesión</a></p>
+  </section>
+</Layout>
+
+<script>
+  document.getElementById('register-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const status = document.getElementById('status');
+    status.textContent = '';
+    status.classList.remove('error');
+
+    const data = Object.fromEntries(new FormData(e.currentTarget));
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+        credentials: 'include'
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || 'Error al registrarse.');
+      location.href = '/historial';
+    } catch (err) {
+      status.textContent = err.message;
+      status.classList.add('error');
+    }
+  });
+</script>

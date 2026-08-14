@@ -1,0 +1,24 @@
+---
+import Layout from '../layouts/Layout.astro';
+import UploadForm from '../components/UploadForm.astro';
+---
+
+<Layout title="Office a PDF">
+  <section class="tool">
+    <h1>Office → PDF</h1>
+    <p>
+      Sube un documento de Word, Excel, PowerPoint u ODT y lo convertimos a PDF
+      con el mismo aspecto que en tu procesador de textos.
+    </p>
+    <UploadForm
+      endpoint="/api/convert/office-to-pdf"
+      accept=".docx,.doc,.xlsx,.pptx,.odt"
+      multiple={false}
+    />
+    <p class="privacy-note">
+      ⚠️ Estas herramientas requieren un espacio de trabajo temporal en el
+      servidor, que se elimina automáticamente al terminar la conversión.
+      Si no tienes cuenta, nada se guarda.
+    </p>
+  </section>
+</Layout>

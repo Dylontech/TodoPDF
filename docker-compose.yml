@@ -1,0 +1,89 @@
+# ─────────────────────────────────────────────────────────────
+# TodoPDF — Orquestación completa (frontend, backend, MariaDB)
+# Los valores ${VAR:-default} se sustituyen desde .env (opcional).
+# ─────────────────────────────────────────────────────────────
+name: todopdf
+
+services:
+  # ── Base de datos ──────────────────────────────────────────
+  db:
+    image: mariadb:11
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: ${TODOPDF_DB_NAME:-todopdf}
+      MARIADB_USER: ${TODOPDF_DB_USER:-todopdf}
+      MARIADB_PASSWORD: ${TODOPDF_DB_PASSWORD:-todopdf_secret_password}
+      MARIADB_ROOT_PASSWORD: ${TODOPDF_DB_ROOT_PASSWORD:-todopdf_root_secret}
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  # ── API REST ───────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      # Red del host durante el build: evita ECONNRESET del registro npm
+      # en redes bridge/VPN (la red host sí alcanza el registro).
+      network: host
+    restart: unless-stopped
+    environment:
+      TODOPDF_NODE_ENV: ${TODOPDF_NODE_ENV:-production}
+      TODOPDF_PORT: ${TODOPDF_PORT:-3000}
+      # Secreto de sesión: usa el de .env o un valor por defecto de desarrollo
+      TODOPDF_SESSION_SECRET: ${TODOPDF_SESSION_SECRET:-dev-only-change-me-please}
+      TODOPDF_CORS_ORIGIN: ${TODOPDF_CORS_ORIGIN:-http://localhost:8080}
+      # Base de datos (host = nombre del servicio)
+      TODOPDF_DB_HOST: db
+      TODOPDF_DB_PORT: ${TODOPDF_DB_PORT:-3306}
+      TODOPDF_DB_NAME: ${TODOPDF_DB_NAME:-todopdf}
+      TODOPDF_DB_USER: ${TODOPDF_DB_USER:-todopdf}
+      TODOPDF_DB_PASSWORD: ${TODOPDF_DB_PASSWORD:-todopdf_secret_password}
+      # Límites de subida
+      TODOPDF_MAX_UPLOAD_GUEST: ${TODOPDF_MAX_UPLOAD_GUEST:-26214400}
+      TODOPDF_MAX_UPLOAD_AUTH: ${TODOPDF_MAX_UPLOAD_AUTH:-104857600}
+      # Conversión
+      TODOPDF_GS_TIMEOUT_MS: ${TODOPDF_GS_TIMEOUT_MS:-60000}
+      TODOPDF_MAX_PAGES: ${TODOPDF_MAX_PAGES:-100}
+      TODOPDF_JPEG_QUALITY: ${TODOPDF_JPEG_QUALITY:-85}
+      TODOPDF_IMAGE_DPI: ${TODOPDF_IMAGE_DPI:-150}
+      TODOPDF_MAX_CONCURRENCY: ${TODOPDF_MAX_CONCURRENCY:-2}
+      # Conversión Office (LibreOffice)
+      TODOPDF_SOFFICE_TIMEOUT_MS: ${TODOPDF_SOFFICE_TIMEOUT_MS:-120000}
+      TODOPDF_OFFICE_MAX_CONCURRENCY: ${TODOPDF_OFFICE_MAX_CONCURRENCY:-1}
+      # Storage (montado como volumen)
+      TODOPDF_STORAGE_DIR: /data/storage
+      TODOPDF_TEMP_DIR: /data/tmp
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      # Volumen con los archivos de usuarios autenticados
+      - uploads:/data
+    expose:
+      - "3000"
+    # Memoria: LibreOffice headless puede consumir cientos de MB por instancia
+    # (concurrencia Office limitada a 1). shm_size cubre el /dev/shm que usa LO.
+    shm_size: "256m"
+    # Protección básica de RAM
+    mem_limit: ${TODOPDF_BACKEND_MEM_LIMIT:-2g}
+
+  # ── Frontend (Astro + nginx) ───────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      # Red del host durante el build (mismo motivo que el backend).
+      network: host
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${TODOPDF_HTTP_PORT:-8080}:80"
+
+volumes:
+  db_data:      # datos de MariaDB
+  uploads:      # archivos convertidos de usuarios autenticados

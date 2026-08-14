@@ -1,0 +1,85 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Historial">
+  <section class="tool">
+    <h1>Mi historial</h1>
+    <p>Tus conversiones guardadas. Si no has iniciado sesión, serás redirigido.</p>
+    <div id="history" class="history">
+      <p class="status">Cargando…</p>
+    </div>
+  </section>
+</Layout>
+
+<script>
+  const LABELS = {
+    'pdf-to-images': 'PDF → Imágenes',
+    'images-to-pdf': 'Imágenes → PDF'
+  };
+
+  async function main() {
+    const box = document.getElementById('history');
+
+    // 1) Verificar sesión (las cookies viajan automáticamente)
+    let me = null;
+    try {
+      const r = await fetch('/api/auth/me', { credentials: 'include' });
+      me = await r.json();
+    } catch {
+      /* sin sesión */
+    }
+    if (!me || !me.user) {
+      location.href = '/login';
+      return;
+    }
+
+    // 2) Cargar el historial
+    const res = await fetch('/api/history', { credentials: 'include' });
+    if (!res.ok) {
+      box.innerHTML = '<p class="status error">No se pudo cargar el historial.</p>';
+      return;
+    }
+    const { history } = await res.json();
+    if (!history.length) {
+      box.innerHTML = '<p class="status">Aún no tienes conversiones. ¡Prueba una herramienta!</p>';
+      return;
+    }
+
+    // 3) Renderizar la tabla
+    box.innerHTML = `
+      <table class="history-table">
+        <thead>
+          <tr><th>Tipo</th><th>Archivo de origen</th><th>Tamaño</th><th>Fecha</th><th></th></tr>
+        </thead>
+        <tbody>
+          ${history
+            .map(
+              (h) => `
+                <tr>
+                  <td>${LABELS[h.type] || escapeHtml(h.type)}</td>
+                  <td class="truncate" title="${escapeHtml(h.input_filename)}">${escapeHtml(h.input_filename)}</td>
+                  <td>${formatSize(h.size)}</td>
+                  <td>${new Date(h.created_at).toLocaleString('es')}</td>
+                  <td><a class="btn-download" href="/api/convert/${h.id}/download">Descargar</a></td>
+                </tr>`
+            )
+            .join('')}
+        </tbody>
+      </table>`;
+  }
+
+  function formatSize(bytes) {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / 1048576).toFixed(1)} MB`;
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])
+    );
+  }
+
+  main();
+</script>

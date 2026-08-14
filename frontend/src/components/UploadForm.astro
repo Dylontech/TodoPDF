@@ -1,0 +1,142 @@
+---
+// Formulario de subida reutilizable.
+// Props:
+//   endpoint        → ruta API (ej. /api/convert/pdf-to-images)
+//   accept          → atributo accept del input (ej. application/pdf)
+//   multiple        → admite varios archivos
+//   formatSelector  → muestra selector de formato de salida
+//   formats         → [{ value, label }] para el selector
+
+const {
+  endpoint,
+  accept,
+  multiple = false,
+  formatSelector = false,
+  formats = []
+} = Astro.props;
+---
+
+<form id="upload-form" class="upload-form">
+  <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Subir archivos">
+    <input type="file" id="file-input" accept={accept} {multiple} hidden />
+    <p class="dropzone-hint">Arrastra tus archivos aquí o haz clic para elegirlos</p>
+    <p id="file-info" class="file-info"></p>
+  </div>
+
+  {formatSelector && (
+    <label class="field">
+      <span>Formato de salida</span>
+      <select id="format">
+        {formats.map((f) => <option value={f.value}>{f.label}</option>)}
+      </select>
+    </label>
+  )}
+
+  <button type="submit" id="submit-btn" class="btn-primary">Convertir</button>
+  <p id="status" class="status" role="status"></p>
+</form>
+
+<div id="result" class="result" hidden></div>
+
+<script define:vars={{ endpoint, formatSelector }}>
+  const form = document.getElementById('upload-form');
+  const input = document.getElementById('file-input');
+  const dropzone = document.getElementById('dropzone');
+  const info = document.getElementById('file-info');
+  const statusEl = document.getElementById('status');
+  const submitBtn = document.getElementById('submit-btn');
+  const result = document.getElementById('result');
+
+  // ── Selección de archivos (clic + arrastrar y soltar) ─────
+  dropzone.addEventListener('click', () => input.click());
+  dropzone.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); }
+  });
+
+  ['dragover', 'dragenter'].forEach((ev) =>
+    dropzone.addEventListener(ev, (e) => { e.preventDefault(); dropzone.classList.add('dragging'); })
+  );
+  ['dragleave', 'drop'].forEach((ev) =>
+    dropzone.addEventListener(ev, (e) => { e.preventDefault(); dropzone.classList.remove('dragging'); })
+  );
+
+  dropzone.addEventListener('drop', (e) => {
+    if (e.dataTransfer?.files?.length) {
+      input.files = e.dataTransfer.files;
+      updateInfo();
+    }
+  });
+  input.addEventListener('change', updateInfo);
+
+  function updateInfo() {
+    const files = [...input.files];
+    info.textContent = files.length
+      ? files.map((f) => `${f.name} (${(f.size / 1048576).toFixed(2)} MB)`).join(', ')
+      : '';
+  }
+
+  // ── Envío a la API ─────────────────────────────────────────
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const files = [...input.files];
+    if (files.length === 0) { setStatus('Selecciona al menos un archivo.', true); return; }
+
+    setStatus('Convirtiendo…');
+    submitBtn.disabled = true;
+    try {
+      const fd = new FormData();
+      files.forEach((f) => fd.append('files', f));
+      if (formatSelector) fd.append('format', document.getElementById('format').value);
+
+      const res = await fetch(endpoint, { method: 'POST', body: fd, credentials: 'include' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Error ${res.status}`);
+      }
+
+      const ctype = res.headers.get('content-type') || '';
+
+      // Flujo autenticado → JSON { id } → descarga vía /download
+      if (ctype.includes('application/json')) {
+        const data = await res.json();
+        showResultLink(`/api/convert/${data.id}/download`, 'Descargar resultado');
+        setStatus('Conversión guardada en tu historial.');
+      }
+      // Flujo invitado → el archivo llega directamente (blob)
+      else {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const name = filenameFromDisposition(res.headers.get('content-disposition')) || 'resultado';
+        showResultLink(url, name, true);
+        setStatus('¡Conversión completada!');
+      }
+    } catch (err) {
+      setStatus(err.message || 'Error al convertir.', true);
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+
+  // ── Helpers de UI ──────────────────────────────────────────
+  function setStatus(msg, isError = false) {
+    statusEl.textContent = msg;
+    statusEl.classList.toggle('error', isError);
+  }
+
+  function showResultLink(url, label, download = false) {
+    result.innerHTML = '';
+    result.hidden = false;
+    const a = document.createElement('a');
+    a.href = url;
+    a.className = 'btn-download';
+    a.textContent = `⬇ ${label}`;
+    if (download) a.setAttribute('download', label);
+    result.appendChild(a);
+  }
+
+  function filenameFromDisposition(header) {
+    if (!header) return null;
+    const m = header.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
+    return m ? decodeURIComponent(m[1]) : null;
+  }
+</script>

@@ -1,0 +1,23 @@
+# Dependencias
+node_modules/
+
+# Entorno y secretos
+.env
+.env.local
+
+# Artefactos de build
+dist/
+build/
+.astro/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Datos generados en local (los contenedores usan volúmenes)
+backend/uploads/
+.data/
+
+# Sistemas
+.DS_Store
+Thumbs.db

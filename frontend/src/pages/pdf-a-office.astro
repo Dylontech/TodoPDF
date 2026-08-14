@@ -1,0 +1,35 @@
+---
+import Layout from '../layouts/Layout.astro';
+import UploadForm from '../components/UploadForm.astro';
+
+// Formatos de salida admitidos por el backend (PDF → Office)
+const formats = [
+  { value: 'docx', label: 'DOCX (Word)' },
+  { value: 'doc', label: 'DOC (Word 97)' },
+  { value: 'xlsx', label: 'XLSX (Excel)' },
+  { value: 'pptx', label: 'PPTX (PowerPoint)' },
+  { value: 'odt', label: 'ODT (LibreOffice)' }
+];
+---
+
+<Layout title="PDF a Office">
+  <section class="tool">
+    <h1>PDF → Office</h1>
+    <p>
+      Convierte tu PDF en un documento editable de Word, Excel, PowerPoint u ODT.
+      La conversión es «best effort»: el layout puede variar respecto al PDF,
+      especialmente en XLSX y PPTX.
+    </p>
+    <UploadForm
+      endpoint="/api/convert/pdf-to-office"
+      accept="application/pdf"
+      formatSelector={true}
+      formats={formats}
+    />
+    <p class="privacy-note">
+      ⚠️ Estas herramientas requieren un espacio de trabajo temporal en el
+      servidor, que se elimina automáticamente al terminar la conversión.
+      Si no tienes cuenta, nada se guarda.
+    </p>
+  </section>
+</Layout>

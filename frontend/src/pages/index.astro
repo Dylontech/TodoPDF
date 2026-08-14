@@ -1,0 +1,52 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Inicio">
+  <section class="hero">
+    <h1>Convierte archivos de forma <em>privada</em></h1>
+    <p>
+      Herramientas de PDF, imágenes y Office autoalojadas. Como invitado, tus
+      archivos se procesan en memoria o en un espacio temporal privado que se
+      elimina al instante.
+    </p>
+  </section>
+
+  <section class="tools">
+    <a href="/pdf-a-jpg" class="tool-card">
+      <span class="tool-icon">🖼️</span>
+      <h2>PDF → Imágenes</h2>
+      <p>Convierte cada página de tu PDF en una imagen (JPG, PNG, WebP…).</p>
+    </a>
+    <a href="/imagenes-a-pdf" class="tool-card">
+      <span class="tool-icon">📑</span>
+      <h2>Imágenes → PDF</h2>
+      <p>Combina varias imágenes en un único archivo PDF.</p>
+    </a>
+    <a href="/pdf-a-office" class="tool-card">
+      <span class="tool-icon">📝</span>
+      <h2>PDF → Office</h2>
+      <p>Convierte tu PDF en un documento editable (DOCX, XLSX, PPTX, ODT…).</p>
+    </a>
+    <a href="/office-a-pdf" class="tool-card">
+      <span class="tool-icon">💼</span>
+      <h2>Office → PDF</h2>
+      <p>Convierte documentos de Word, Excel o PowerPoint a PDF.</p>
+    </a>
+  </section>
+
+  <section class="privacy">
+    <h2>Privacidad primero</h2>
+    <ul>
+      <li>
+        <strong>Invitados:</strong> los archivos de PDF e imágenes se procesan en
+        memoria RAM y nunca tocan el disco. Las herramientas de Office usan un
+        espacio temporal privado que se borra al instante.
+      </li>
+      <li>
+        <strong>Con cuenta:</strong> guardamos tus conversiones en nuestro servidor y
+        mantienes un historial descargable.
+      </li>
+    </ul>
+  </section>
+</Layout>

@@ -1,0 +1,19 @@
+---
+import Layout from '../layouts/Layout.astro';
+import UploadForm from '../components/UploadForm.astro';
+---
+
+<Layout title="Imágenes a PDF">
+  <section class="tool">
+    <h1>Imágenes → PDF</h1>
+    <p>
+      Sube varias imágenes (JPG, PNG, WebP, GIF…) y las combinamos en un único PDF,
+      una imagen por página.
+    </p>
+    <UploadForm
+      endpoint="/api/convert/images-to-pdf"
+      accept="image/*"
+      multiple={true}
+    />
+  </section>
+</Layout>

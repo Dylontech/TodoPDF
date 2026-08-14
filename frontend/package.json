@@ -1,0 +1,20 @@
+{
+  "name": "todopdf-frontend",
+  "version": "1.0.0",
+  "description": "Frontend Astro de TodoPDF — interfaz para convertir PDFs e imágenes de forma privada.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "astro": "^5.0.0"
+  },
+  "allowScripts": {
+    "esbuild@0.27.7": true,
+    "esbuild@0.25.12": true,
+    "sharp@0.34.5": true
+  }
+}

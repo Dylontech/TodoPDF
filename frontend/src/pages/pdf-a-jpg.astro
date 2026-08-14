@@ -1,0 +1,30 @@
+---
+import Layout from '../layouts/Layout.astro';
+import UploadForm from '../components/UploadForm.astro';
+
+// Formatos de salida admitidos por el backend (PDF → imágenes)
+const formats = [
+  { value: 'jpeg', label: 'JPG' },
+  { value: 'png', label: 'PNG' },
+  { value: 'webp', label: 'WebP' },
+  { value: 'tiff', label: 'TIFF' },
+  { value: 'bmp', label: 'BMP' },
+  { value: 'gif', label: 'GIF' }
+];
+---
+
+<Layout title="PDF a Imágenes">
+  <section class="tool">
+    <h1>PDF → Imágenes</h1>
+    <p>
+      Convierte tu PDF en imágenes. Si tiene varias páginas, recibirás un ZIP con
+      una imagen por página.
+    </p>
+    <UploadForm
+      endpoint="/api/convert/pdf-to-images"
+      accept="application/pdf"
+      formatSelector={true}
+      formats={formats}
+    />
+  </section>
+</Layout>
