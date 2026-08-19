@@ -1,0 +1,9 @@
+# ─────────────────────────────────────────────────────────────
+# TodoPDF — robots.txt
+# Permite indexar todas las páginas públicas y bloquea la API.
+# ─────────────────────────────────────────────────────────────
+User-agent: *
+Allow: /
+Disallow: /api/
+
+Sitemap: https://todopdf.dylontech.com/sitemap.xml

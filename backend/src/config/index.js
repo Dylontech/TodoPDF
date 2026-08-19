@@ -111,6 +111,20 @@ const config = {
     timeoutMs: Number(process.env.TODOPDF_REMOVEBG_TIMEOUT_MS || 120_000),
     // Procesamientos simultáneos (protege la RAM/CPU del servidor)
     maxConcurrency: Number(process.env.TODOPDF_REMOVEBG_CONCURRENCY || 1)
+  },
+
+  // ── Vectorizar imagen a SVG (vtracer, solo usuarios autenticados) ──
+  vectorize: {
+    // Python con vtracer instalado (venv local / python3 del sistema en Docker)
+    pythonPath: process.env.TODOPDF_VECTORIZE_PYTHON || 'python3',
+    // Script Python que invoca vtracer (imagen por stdin, SVG de salida)
+    scriptPath: path.join(__dirname, '../../scripts/vectorize.py'),
+    // Modo por defecto: 'color' o 'binary' (blanco y negro)
+    mode: process.env.TODOPDF_VECTORIZE_MODE || 'color',
+    // Tiempo máximo por imagen (las imágenes grandes son más lentas)
+    timeoutMs: Number(process.env.TODOPDF_VECTORIZE_TIMEOUT_MS || 120_000),
+    // Procesamientos simultáneos (protege la RAM/CPU del servidor)
+    maxConcurrency: Number(process.env.TODOPDF_VECTORIZE_CONCURRENCY || 1)
   }
 };
 

@@ -3,7 +3,9 @@ import '../styles/global.css';
 import NavBar from '../components/NavBar.astro';
 
 // Layout base: cabecera, contenido y pie.
-const { title = 'TodoPDF' } = Astro.props;
+// `noindex` (opcional): añade meta robots noindex para páginas privadas
+// (login, registro, historial y herramientas solo para usuarios).
+const { title = 'TodoPDF', noindex = false } = Astro.props;
 ---
 
 <!doctype html>
@@ -16,6 +18,8 @@ const { title = 'TodoPDF' } = Astro.props;
       content="Convierte PDFs e imágenes de forma privada y segura. Autoalojado: tus archivos nunca se suben a la nube."
     />
     <title>{title} · TodoPDF</title>
+    {noindex && <meta name="robots" content="noindex, nofollow" />}
+    <link rel="sitemap" type="application/xml" href="/sitemap.xml" />
     <link
       rel="icon"
       href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📄</text></svg>"

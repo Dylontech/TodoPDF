@@ -2,7 +2,7 @@
 import Layout from '../layouts/Layout.astro';
 ---
 
-<Layout title="Historial">
+<Layout title="Historial" noindex>
   <section class="tool">
     <h1>Mi historial</h1>
     <p>Tus conversiones guardadas. Si no has iniciado sesión, serás redirigido.</p>
@@ -16,7 +16,8 @@ import Layout from '../layouts/Layout.astro';
   const LABELS = {
     'pdf-to-images': 'PDF → Imágenes',
     'images-to-pdf': 'Imágenes → PDF',
-    'remove-bg': 'Quitar fondo'
+    'remove-bg': 'Quitar fondo',
+    'image-to-vector': 'Imagen → Vectorial (SVG)'
   };
 
   async function main() {

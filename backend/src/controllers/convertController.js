@@ -252,12 +252,13 @@ async function download(req, res, next) {
     }
 
     // Archivo único: el Content-Type depende de la extensión del resultado
-    // (PDF, o PNG/WebP/JPG para herramientas de imagen como "quitar fondo").
+    // (PDF, PNG/WebP/JPG para herramientas de imagen o SVG para vectorizar).
     const ext = path.extname(row.output_path).toLowerCase();
     const mime =
       ext === '.png' ? 'image/png'
       : ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg'
       : ext === '.webp' ? 'image/webp'
+      : ext === '.svg' ? 'image/svg+xml'
       : 'application/pdf';
     res.setHeader('Content-Type', mime);
     res.setHeader('Content-Disposition', `attachment; filename="${path.basename(row.output_path)}"`);

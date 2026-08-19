@@ -4,7 +4,7 @@ Aplicación web **autoalojada** estilo iLovePDF con un enfoque estricto en la **
 
 - **Backend:** Node.js (API REST) + Knex (MariaDB/MySQL).
 - **Frontend:** Astro (build estático servido por nginx).
-- **Infraestructura:** Docker + Docker Compose (con Ghostscript, ImageMagick, Poppler, LibreOffice, ffmpeg y yt-dlp).
+- **Infraestructura:** Docker + Docker Compose (con Ghostscript, ImageMagick, Poppler, LibreOffice, ffmpeg, yt-dlp y herramientas Python: rembg y vtracer).
 
 ## Conversiones del MVP
 
@@ -39,11 +39,26 @@ gracias a **yt-dlp**.
 - Los archivos se guardan en el volumen del usuario (`downloads/`) y quedan registrados en su historial.
 - Frontend: `/descargar-videos` (el enlace solo aparece en la barra de navegación con sesión iniciada).
 
+## Vectorizar imagen a SVG (solo usuarios registrados)
+
+Sección **exclusiva para cuentas con sesión iniciada** que convierte imágenes
+(PNG, JPG, WebP, GIF, BMP) en **SVG vectorial** gracias a **vtracer**.
+
+- Sube una imagen → elige **Color** o **Blanco y negro** → obtén un SVG escalable.
+- Los resultados se guardan en el volumen del usuario y quedan registrados en su historial
+  (`/historial`), con descarga vía `/api/convert/:id/download`.
+- Todos los endpoints exigen sesión; el procesamiento tiene **timeout y concurrencia limitada**.
+- Backend: `POST /api/vectorize` (multipart `files` + `mode`). Motor: `vtracer` (Python, se instala
+  en el venv `/opt/rembg` del backend; no necesita descargar modelos).
+- Frontend: `/imagen-a-vectorial` (el enlace solo aparece en la barra de navegación con sesión iniciada).
+
 ## Requisitos
 
 - **Docker + Docker Compose (v2)** — recomendado.
 - **yt-dlp** + **ffmpeg** — descargador de vídeos (yt-dlp requiere `python3`).
 - **Ghostscript**, **Poppler**, **ImageMagick**, **LibreOffice** — conversiones PDF/imágenes/Office.
+- **Python 3 + venv con `rembg` y `vtracer`** — quitar fondo de imagen y vectorizar a SVG (ver
+  [Dependencias Python](#dependencias-python-venv)).
 
 ### Opción A — Docker (recomendado)
 
@@ -103,13 +118,45 @@ y `cd frontend && npm install && npm run dev` (web en :4321, proxya `/api` a :30
 | `yt-dlp`         | Descargador de vídeos (requiere `python3`)                   |
 | `tini`           | Init ligero para el manejo de señales en el contenedor       |
 
+### Dependencias Python (venv)
+
+Las herramientas **"Quitar fondo"** (rembg) y **"Vectorizar a SVG"** (vtracer) corren en un
+**venv Python aislado** (`/opt/rembg` en Docker, `backend/.venv` en local). En local:
+
+```bash
+cd backend
+python3 -m venv .venv
+.venv/bin/pip install "rembg[cpu]" yt-dlp vtracer
+```
+
+> ⚠️ **Arch Linux:** el Python 3.14 del sistema no tiene wheels para `onnxruntime`/`rembg` →
+> crear el venv con **Python 3.12** y usar `uv`:
+>
+> ```bash
+> uv venv .venv --python 3.12
+> uv pip install --python .venv/bin/python "rembg[cpu]" yt-dlp vtracer
+> ```
+>
+> En Debian/Ubuntu/Alpine el `python3` del sistema (3.11/3.12) vale directo.
+
+Y apunta el `.env` del backend a ese venv (solo en local):
+
+```bash
+TODOPDF_REMOVEBG_PYTHON=/ruta/a/backend/.venv/bin/python
+TODOPDF_VECTORIZE_PYTHON=/ruta/a/backend/.venv/bin/python
+```
+
+En Docker esto ya lo hace el `Dockerfile` (instala `rembg[cpu]` y `vtracer` en el venv `/opt/rembg`),
+así que en producción no hay que tocar nada.
+
 ## Puesta en marcha
 
 ```bash
 # 1. Configuración (opcional: los valores por defecto ya funcionan)
 cp .env.example .env
 
-# 2. Construir y levantar
+# 2. Construir y levantar (reconstruye la imagen del backend con el fix de
+#    permisos del volumen /data y el UID/GID fijo de todopdf)
 docker compose up --build -d
 
 # 3. Abrir la aplicación
@@ -129,6 +176,47 @@ docker compose down          # conserva volúmenes
 docker compose down -v       # ELIMINA volúmenes (datos)
 ```
 
+### Permisos del volumen `/data` (importante para upgrades)
+
+El backend corre como el usuario **sin privilegios** `todopdf` (UID/GID **1001**,
+fijos en el Dockerfile). Los directorios `/data/storage` y `/data/tmp` viven en
+el volumen `uploads` de docker compose. Si el volumen se creó en un deploy
+anterior con otro UID (por ejemplo `100:101`), el proceso no puede escribir y
+TODAS las conversiones fallan con `500 Error interno del servidor`.
+
+Para evitarlo, el **entrypoint** (`backend/entrypoint.sh`) arranca como root,
+ejecuta `chown -R todopdf:todopdf /data` y luego baja a `todopdf` con
+`setpriv`. Al hacer `docker compose up --build -d` con la imagen nueva, el
+volumen se repara automáticamente en el primer arranque. Si el problema
+persistiera, puedes forzarlo a mano:
+
+```bash
+# Reparar permisos del volumen sin reconstruir (una vez)
+docker compose exec -u root backend chown -R todopdf:todopdf /data
+docker compose restart backend
+```
+
+### Diagnóstico sin terminal
+
+Si alguna herramienta falla y no tienes acceso a los logs del servidor, abre
+en el navegador:
+
+- `GET /api/health` → `{ "ok": true }` si el backend y la BD responden.
+- `GET /api/diagnostics` → JSON con el estado de **binarios** (gs, pdfinfo,
+  soffice, yt-dlp, python3, ffmpeg), **escritura** real en `/data/storage` y
+  `/data/tmp`, **módulos** (file-type, sharp, pdf-lib, pptxgenjs, archiver) y
+  **BD** (`SELECT 1`).
+
+Para ver el error exacto de un 500 en producción sin logs, activa el flag de
+depuración (solo temporal):
+
+```bash
+TODOPDF_DEBUG_ERRORS=true docker compose up -d backend
+```
+
+Con ese flag, la respuesta 500 incluye `code` y `message` reales (p. ej.
+`EACCES`, `ENOENT`), que apuntan directamente a la causa.
+
 ## Endpoints de la API
 
 | Método | Ruta                             | Descripción                                      |
@@ -147,6 +235,7 @@ docker compose down -v       # ELIMINA volúmenes (datos)
 | POST   | `/api/downloader/download`       | Descarga vídeo/audio (solo auth, `{ url, kind }`)  |
 | GET    | `/api/downloader/history`        | Historial de descargas del usuario (solo auth)     |
 | GET    | `/api/downloader/:id/download`   | Descarga del archivo guardado (solo dueño)         |
+| POST   | `/api/vectorize`                 | Vectoriza una imagen a SVG (solo auth, `files` + `mode`) |
 
 > Invitado: los endpoints de conversión devuelven el archivo (ZIP/JPG/PDF/Office) directamente.
 > Autenticado: devuelven `{ id, ... }`; descarga vía `/api/convert/:id/download`.

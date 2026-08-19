@@ -8,7 +8,7 @@
 #   ghostscript/poppler-utils/imagemagick → PDF ↔ imágenes (pipes en RAM)
 #   libreoffice-writer/calc/impress        → PDF ↔ Office (DOCX/XLSX/PPTX)
 #   fonts-noto*                            → tipografías para un PDF legible
-#   ffmpeg, yt-dlp                         → descargador de vídeos
+#   ffmpeg                               → descargador de vídeos (yt-dlp se instala por pip en el venv)
 #   python3 + venv                         → rembg (quitar fondo con IA)
 #   libgl1/libglib2.0-0/libgomp1           → runtime de opencv-python-headless
 #   tini                                   → init ligero (señales/SIGTERM)
@@ -22,13 +22,15 @@ RUN apt-get -o Acquire::Check-Valid-Until=false -o Acquire::Check-Date=false upd
         ghostscript poppler-utils imagemagick \
         libreoffice-writer libreoffice-calc libreoffice-impress \
         fonts-noto fonts-noto-cjk \
-        ffmpeg yt-dlp \
+        ffmpeg \
         python3 python3-pip python3-venv \
         libgl1 libglib2.0-0 libgomp1 \
         tini \
     && rm -rf /var/lib/apt/lists/* \
-    && groupadd -r todopdf \
-    && useradd -r -g todopdf -d /app -s /usr/sbin/nologin todopdf
+    # UID/GID FIJO (1001): evita que useradd -r asigne un UID dinámico que
+    # rompa la escritura de volúmenes creados en builds anteriores.
+    && groupadd -g 1001 todopdf \
+    && useradd -u 1001 -g 1001 -M -d /app -s /usr/sbin/nologin todopdf
 
 WORKDIR /app
 
@@ -46,30 +48,51 @@ RUN npm install --omit=dev --no-audit --no-fund \
 # Código fuente de la aplicación
 COPY . .
 
-# ── rembg (quitar fondo de imagen) en un venv aislado ─────────
+# ── rembg (quitar fondo) + vtracer (vectorizar a SVG) en un venv ──
 # También se instala yt-dlp (versión reciente) para que el PATH resuelva
 # "yt-dlp" a una versión que mantenga el anti-403 de YouTube.
+# vtracer no necesita descargar modelos (a diferencia de rembg).
 ENV VIRTUAL_ENV=/opt/rembg
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 # Modelo u2net precargado en build (evita descargarlo en la 1ª petición).
 # /models se deja escribible porque onnxruntime crea un bloqueo de sesión.
 ENV U2NET_HOME=/models
 ENV OMP_NUM_THREADS=2
+# numba (usado por pymatting/rembg) intenta cachear funciones JIT en el
+# __pycache__ del paquete (root, no escribible por todopdf) → falla con
+# "no locator available". Se redirige su caché a un dir escribible y además
+# se deja escribible el __pycache__ de los paquetes del venv (fix definitivo).
+ENV NUMBA_CACHE_DIR=/tmp/numba-cache
 RUN python3 -m venv "$VIRTUAL_ENV" \
     && pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir "rembg[cpu]" yt-dlp \
+    && pip install --no-cache-dir "rembg[cpu]" yt-dlp vtracer \
     && mkdir -p /models && chmod 777 /models \
-    && python3 -c "from rembg import new_session; new_session('u2net')"
+    && python3 -c "from rembg import new_session; new_session('u2net')" \
+    # El proceso final corre como todopdf: el modelo y su dir deben ser
+    # legibles (u2net.onnx se descarga con permisos 600 de root → EACCES).
+    && chown -R todopdf:todopdf /models \
+    && mkdir -p "$NUMBA_CACHE_DIR" && chown todopdf:todopdf "$NUMBA_CACHE_DIR" \
+    # rembg usa numba con cache=True y pymatting crea sus .nbc en el
+    # __pycache__ del paquete; si no es escribible por todopdf, el import
+    # falla con "cannot cache function ... no locator available".
+    && chmod -R a+rwX "$VIRTUAL_ENV/lib/python3.11/site-packages/pymatting" \
+                "$VIRTUAL_ENV/lib/python3.11/site-packages/rembg"
 
 # Directorios de datos (montados como volúmenes en docker-compose).
 # Se crean y se entregan al usuario todopdf ANTES de cambiar de usuario,
 # porque el usuario sin privilegios no puede crear directorios en la raíz.
 RUN mkdir -p /data/storage /data/tmp && chown -R todopdf:todopdf /data
 
-# Principio de mínimo privilegio: el proceso corre sin root
-USER todopdf
+# Entrypoint: repara permisos del volumen /data (un volumen con nombre
+# persiste el dueño de su primera creación; si el UID de todopdf cambió
+# entre builds, la app no podría escribir) y luego baja a todopdf.
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
 
 EXPOSE 3000
 
-ENTRYPOINT ["/usr/bin/tini", "--"]
+# El entrypoint arranca como root, arregla /data y baja privilegios con
+# setpriv (util-linux) → el proceso final corre como todopdf (mínimo
+# privilegio), igual que antes con USER todopdf.
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/entrypoint.sh"]
 CMD ["node", "src/server.js"]

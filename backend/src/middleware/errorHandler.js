@@ -8,8 +8,16 @@ function notFound(req, res) {
 }
 
 /**
+ * En producción el detalle del error se oculta al cliente; para diagnosticar
+ * sin acceso a la terminal se puede activar TODOPDF_DEBUG_ERRORS=true, que
+ * añade code/message reales a la respuesta 500.
+ */
+const exposeErrors = process.env.TODOPDF_DEBUG_ERRORS === 'true';
+
+/**
  * Manejador central de errores.
- * En desarrollo incluye el detalle; en producción un mensaje genérico.
+ * En desarrollo incluye el detalle; en producción un mensaje genérico
+ * (o el detalle si TODOPDF_DEBUG_ERRORS=true).
  */
 // eslint-disable-next-line no-unused-vars
 function errorHandler(err, req, res, next) {
@@ -26,12 +34,15 @@ function errorHandler(err, req, res, next) {
   }
 
   const status = err.status || 500;
-  const message = config.env === 'production' ? 'Error interno del servidor.' : err.message;
+  const message =
+    config.env !== 'production' || exposeErrors ? err.message : 'Error interno del servidor.';
 
   // Registro en el servidor (sin exponer detalles sensibles al cliente)
   console.error('[TodoPDF:error]', err);
 
-  res.status(status).json({ error: message });
+  const body = { error: message };
+  if (exposeErrors && err.code) body.code = err.code;
+  res.status(status).json(body);
 }
 
 module.exports = { notFound, errorHandler };

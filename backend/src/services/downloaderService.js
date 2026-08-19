@@ -25,9 +25,10 @@ const { httpError } = require('../utils/errors');
 const DL_TMP = path.join(config.storage.tempDir, 'downloader');
 fs.mkdir(DL_TMP, { recursive: true }).catch(() => {});
 
-// Clientes alternativos de YouTube (anti-403): algunos vídeos bloquean el
-// cliente por defecto (android_vr) → fallback a tv/web_embedded/android/ios.
-const YT_EXTRACTOR_ARGS = 'youtube:player_client=default,android,tv,web_embedded,ios';
+// Clientes alternativos de YouTube (anti-403): el cliente por defecto (web)
+// genera URLs de stream que YouTube bloquea con 403 al descargar; web_embedded
+// y android sí funcionan. Se prioriza web_embedded y se omite `default`.
+const YT_EXTRACTOR_ARGS = 'youtube:player_client=web_embedded,android,tv,ios';
 
 // Mapa de sufijos de host → plataforma legible.
 const HOST_PLATFORM = [

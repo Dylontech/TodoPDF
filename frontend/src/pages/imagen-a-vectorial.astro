@@ -2,36 +2,49 @@
 import Layout from '../layouts/Layout.astro';
 ---
 
-<Layout title="Quitar fondo de imagen" noindex>
+<Layout title="Imagen → Vectorial (SVG)" noindex>
   <section class="tool">
-    <h1>✨ Quitar fondo de imagen</h1>
+    <h1>📐 Imagen → Vectorial (SVG)</h1>
     <p>
-      Elimina el fondo de tus fotos con IA (personas, productos, mascotas…)
-      y obtén una imagen <strong>PNG con fondo transparente</strong>.
+      Convierte una imagen (PNG, JPG, WebP…) en un <strong>SVG vectorial</strong>
+      escalable sin pérdida de calidad. Ideal para logos, dibujos o iconos.
       Esta sección es <strong>exclusiva para usuarios registrados</strong>.
     </p>
 
-    <form id="bg-form" class="upload-form" autocomplete="off">
+    <form id="vec-form" class="upload-form" autocomplete="off">
       <label class="field">
-        <span>Elige una imagen (PNG, JPG, WebP…)</span>
+        <span>Elige una imagen (PNG, JPG, WebP, GIF, BMP…)</span>
         <input id="file-input" type="file" name="files" accept="image/*" required />
       </label>
-      <img id="preview" class="bg-preview" alt="Vista previa" hidden />
-      <button type="submit" id="btn-process" class="btn-primary">Quitar fondo</button>
+
+      <fieldset class="field radio-group">
+        <legend>Modo de vectorización</legend>
+        <label class="radio">
+          <input type="radio" name="mode" value="color" checked />
+          <span>Color</span>
+        </label>
+        <label class="radio">
+          <input type="radio" name="mode" value="binary" />
+          <span>Blanco y negro</span>
+        </label>
+      </fieldset>
+
+      <img id="preview" class="vec-preview" alt="Vista previa" hidden />
+      <button type="submit" id="btn-process" class="btn-primary">Vectorizar</button>
       <p id="status" class="status" role="status"></p>
     </form>
 
-    <div id="result" class="bg-result" hidden>
+    <div id="result" class="vec-result" hidden>
       <h2>Resultado</h2>
-      <img id="result-img" class="bg-preview" alt="Imagen sin fondo" />
+      <img id="result-img" class="vec-preview" alt="SVG vectorizado" />
       <p id="result-status" class="status"></p>
-      <a id="result-link" class="btn-download" href="#">Descargar PNG sin fondo</a>
+      <a id="result-link" class="btn-download" href="#">Descargar SVG</a>
     </div>
   </section>
 </Layout>
 
 <style>
-  .bg-preview {
+  .vec-preview {
     max-width: 100%;
     max-height: 320px;
     border-radius: var(--radius);
@@ -44,7 +57,7 @@ import Layout from '../layouts/Layout.astro';
     background-position: 0 0, 10px 10px;
     background-color: #fff;
   }
-  .bg-result {
+  .vec-result {
     margin-top: 1rem;
     background: var(--surface);
     color: var(--text);
@@ -52,8 +65,8 @@ import Layout from '../layouts/Layout.astro';
     padding: 1.25rem;
     box-shadow: var(--shadow);
   }
-  .bg-result h2 { margin: 0 0 0.5rem; font-size: 1.1rem; }
-  .bg-result .btn-download { display: inline-block; margin-top: 0.5rem; }
+  .vec-result h2 { margin: 0 0 0.5rem; font-size: 1.1rem; }
+  .vec-result .btn-download { display: inline-block; margin-top: 0.5rem; }
 </style>
 
 <script>
@@ -70,7 +83,7 @@ import Layout from '../layouts/Layout.astro';
 
   async function main() {
     const status = $<HTMLParagraphElement>('status');
-    const form = $<HTMLFormElement>('bg-form');
+    const form = $<HTMLFormElement>('vec-form');
     const fileInput = $<HTMLInputElement>('file-input');
 
     // 1) Verificar sesión (redirige a login si no hay sesión)
@@ -100,7 +113,7 @@ import Layout from '../layouts/Layout.astro';
       preview.hidden = false;
     });
 
-    // 3) Quitar fondo
+    // 3) Vectorizar
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       status.textContent = '';
@@ -114,33 +127,37 @@ import Layout from '../layouts/Layout.astro';
         return;
       }
 
+      const modeInput = form.querySelector<HTMLInputElement>('input[name="mode"]:checked');
+      const mode = modeInput ? modeInput.value : 'color';
+
       const btn = $<HTMLButtonElement>('btn-process');
       btn.disabled = true;
-      btn.textContent = 'Quitando fondo… (puede tardar unos segundos)';
+      btn.textContent = 'Vectorizando… (puede tardar unos segundos)';
 
       try {
         const fd = new FormData();
         fd.append('files', file);
-        const res = await fetch('/api/remove-bg', {
+        fd.append('mode', mode);
+        const res = await fetch('/api/vectorize', {
           method: 'POST',
           body: fd,
           credentials: 'include'
         });
         const body = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(body.error || 'No se pudo quitar el fondo.');
+        if (!res.ok) throw new Error(body.error || 'No se pudo vectorizar la imagen.');
 
         const url = `/api/convert/${body.id}/download`;
         $<HTMLImageElement>('result-img').src = url;
         $<HTMLAnchorElement>('result-link').href = url;
         $<HTMLParagraphElement>('result-status').textContent =
-          'Fondo eliminado. Guardado en tu historial.';
+          'Imagen vectorizada. Guardada en tu historial.';
         $<HTMLDivElement>('result').hidden = false;
       } catch (err) {
         status.textContent = errMsg(err);
         status.classList.add('error');
       } finally {
         btn.disabled = false;
-        btn.textContent = 'Quitar fondo';
+        btn.textContent = 'Vectorizar';
       }
     });
   }

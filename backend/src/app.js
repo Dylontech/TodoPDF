@@ -16,6 +16,8 @@ const historyRoutes = require('./routes/history.routes');
 const pdfToolsRoutes = require('./routes/pdfTools.routes');
 const downloaderRoutes = require('./routes/downloader.routes');
 const removeBgRoutes = require('./routes/removeBg.routes');
+const vectorizeRoutes = require('./routes/vectorize.routes');
+const { getDiagnostics } = require('./controllers/diagnosticsController');
 
 const app = express();
 
@@ -87,17 +89,30 @@ const removeBgLimiter = rateLimit({
   message: { error: 'Demasiadas peticiones de eliminación de fondo. Inténtalo más tarde.' }
 });
 
+const vectorizeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiadas peticiones de vectorización. Inténtalo más tarde.' }
+});
+
 // ── Rutas ────────────────────────────────────────────────────
 // Salud simple para orquestadores/healthchecks. Se declara ANTES de los
 // routers protegidos: los routers con requireAuth responderían 401 a
 // cualquier /api/* (incluido /api/health) si este llegara después.
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
+// Diagnóstico del entorno (binarios, permisos de escritura, módulos, BD).
+// Sin auth a propósito: accesible desde el navegador sin terminal.
+app.get('/api/diagnostics', getDiagnostics);
+
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api', uploadLimiter, convertRoutes);
 app.use('/api', uploadLimiter, pdfToolsRoutes);
 app.use('/api', downloaderLimiter, downloaderRoutes);
 app.use('/api', removeBgLimiter, removeBgRoutes);
+app.use('/api', vectorizeLimiter, vectorizeRoutes);
 app.use('/api', historyRoutes);
 
 // ── Errores ──────────────────────────────────────────────────
