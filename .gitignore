@@ -9,6 +9,9 @@ node_modules/
 backend/.venv/
 __pycache__/
 
+# Modelo big-lama local (quitar objetos de imagen)
+backend/.models/
+
 # Artefactos de build
 dist/
 build/

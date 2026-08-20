@@ -52,6 +52,23 @@ Sección **exclusiva para cuentas con sesión iniciada** que convierte imágenes
   en el venv `/opt/rembg` del backend; no necesita descargar modelos).
 - Frontend: `/imagen-a-vectorial` (el enlace solo aparece en la barra de navegación con sesión iniciada).
 
+## Quitar objetos de imagen (solo usuarios registrados)
+
+Sección **exclusiva para cuentas con sesión iniciada** que **borra personas, rocas u otros objetos**
+de una imagen y rellena la zona con el entorno (inpainting) gracias al modelo **LaMa big-lama** (ONNX, CPU).
+
+- Sube una imagen (PNG, JPG, WebP) y **pinta con el pincel** sobre el objeto a quitar, o pulsa
+  **✨ Auto** y **haz clic** sobre el objeto (máscara automática por flood-fill + detección de primer plano).
+- Puedes ajustar el tamaño del pincel, usar el **borrador**, **deshacer** y **limpiar** antes de procesar.
+- Los resultados se guardan en el volumen del usuario y quedan registrados en su historial
+  (`/historial`), con descarga vía `/api/convert/:id/download`.
+- Todos los endpoints exigen sesión; el procesamiento tiene **timeout y concurrencia limitada**.
+- Backend: `POST /api/inpaint` (multipart `files` + `mask`) y `POST /api/inpaint/auto-mask`
+  (multipart `files` + `x`/`y`). Motor: script Python `backend/scripts/inpaint.py` (modelo
+  `big-lama.onnx` — export oficial de OpenCV `inpainting_lama`, ~92MB — descargado en el
+  build de Docker a `/models/`).
+- Frontend: `/quitar-objetos` (el enlace solo aparece en la barra de navegación con sesión iniciada).
+
 ## Requisitos
 
 - **Docker + Docker Compose (v2)** — recomendado.
@@ -146,8 +163,26 @@ TODOPDF_REMOVEBG_PYTHON=/ruta/a/backend/.venv/bin/python
 TODOPDF_VECTORIZE_PYTHON=/ruta/a/backend/.venv/bin/python
 ```
 
-En Docker esto ya lo hace el `Dockerfile` (instala `rembg[cpu]` y `vtracer` en el venv `/opt/rembg`),
-así que en producción no hay que tocar nada.
+La herramienta **"Quitar objetos"** (LaMa big-lama) además necesita el modelo ONNX
+`big-lama.onnx` (~92MB, export oficial de OpenCV `inpainting_lama`). En Docker se descarga
+en el build a `/models/big-lama.onnx`; en local hay que descargarlo a `backend/.models/`
+(ignorado por git):
+
+```bash
+mkdir -p backend/.models
+curl -L -o backend/.models/big-lama.onnx \
+  "https://huggingface.co/opencv/inpainting_lama/resolve/main/inpainting_lama_2025jan.onnx"
+```
+
+Y en `backend/.env` (solo local):
+
+```bash
+TODOPDF_INPAINT_PYTHON=/ruta/a/backend/.venv/bin/python
+TODOPDF_INPAINT_MODEL=/ruta/a/backend/.models/big-lama.onnx
+```
+
+En Docker esto ya lo hace el `Dockerfile` (instala `rembg[cpu]` y `vtracer` en el venv `/opt/rembg`,
+y descarga `big-lama.onnx` a `/models/`), así que en producción no hay que tocar nada.
 
 ## Puesta en marcha
 
@@ -236,6 +271,8 @@ Con ese flag, la respuesta 500 incluye `code` y `message` reales (p. ej.
 | GET    | `/api/downloader/history`        | Historial de descargas del usuario (solo auth)     |
 | GET    | `/api/downloader/:id/download`   | Descarga del archivo guardado (solo dueño)         |
 | POST   | `/api/vectorize`                 | Vectoriza una imagen a SVG (solo auth, `files` + `mode`) |
+| POST   | `/api/inpaint/auto-mask`         | Máscara automática por clic (solo auth, `files` + `x`/`y`) |
+| POST   | `/api/inpaint`                   | Quita objetos de una imagen (solo auth, `files` + `mask`) |
 
 > Invitado: los endpoints de conversión devuelven el archivo (ZIP/JPG/PDF/Office) directamente.
 > Autenticado: devuelven `{ id, ... }`; descarga vía `/api/convert/:id/download`.

@@ -15,7 +15,8 @@ const PRIVATE_PATHS = new Set([
   '/historial',
   '/descargar-videos',
   '/quitar-fondo',
-  '/imagen-a-vectorial'
+  '/imagen-a-vectorial',
+  '/quitar-objetos'
 ]);
 
 export default defineConfig({

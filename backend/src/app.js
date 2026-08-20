@@ -17,6 +17,7 @@ const pdfToolsRoutes = require('./routes/pdfTools.routes');
 const downloaderRoutes = require('./routes/downloader.routes');
 const removeBgRoutes = require('./routes/removeBg.routes');
 const vectorizeRoutes = require('./routes/vectorize.routes');
+const inpaintRoutes = require('./routes/inpaint.routes');
 const { getDiagnostics } = require('./controllers/diagnosticsController');
 
 const app = express();
@@ -97,6 +98,14 @@ const vectorizeLimiter = rateLimit({
   message: { error: 'Demasiadas peticiones de vectorización. Inténtalo más tarde.' }
 });
 
+const inpaintLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiadas peticiones de eliminación de objetos. Inténtalo más tarde.' }
+});
+
 // ── Rutas ────────────────────────────────────────────────────
 // Salud simple para orquestadores/healthchecks. Se declara ANTES de los
 // routers protegidos: los routers con requireAuth responderían 401 a
@@ -113,6 +122,7 @@ app.use('/api', uploadLimiter, pdfToolsRoutes);
 app.use('/api', downloaderLimiter, downloaderRoutes);
 app.use('/api', removeBgLimiter, removeBgRoutes);
 app.use('/api', vectorizeLimiter, vectorizeRoutes);
+app.use('/api', inpaintLimiter, inpaintRoutes);
 app.use('/api', historyRoutes);
 
 // ── Errores ──────────────────────────────────────────────────

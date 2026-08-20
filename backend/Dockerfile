@@ -78,6 +78,14 @@ RUN python3 -m venv "$VIRTUAL_ENV" \
     && chmod -R a+rwX "$VIRTUAL_ENV/lib/python3.11/site-packages/pymatting" \
                 "$VIRTUAL_ENV/lib/python3.11/site-packages/rembg"
 
+# Modelo LaMa big-lama de OpenCV (inpainting_lama_2025jan.onnx) para
+# "Quitar objetos de imagen". Se descarga en el build para que la 1ª petición
+# no espere a descargarlo y para que corra como todopdf (/models ya se entrega
+# a todopdf en el paso de rembg). ~92MB; convenciones y preproceso en
+# scripts/inpaint.py (compatibles con onnxruntime CPU).
+RUN python3 -c "import urllib.request; urllib.request.urlretrieve('https://huggingface.co/opencv/inpainting_lama/resolve/main/inpainting_lama_2025jan.onnx', '/models/big-lama.onnx')" \
+    && chown todopdf:todopdf /models/big-lama.onnx
+
 # Directorios de datos (montados como volúmenes en docker-compose).
 # Se crean y se entregan al usuario todopdf ANTES de cambiar de usuario,
 # porque el usuario sin privilegios no puede crear directorios en la raíz.

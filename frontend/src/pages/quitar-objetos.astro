@@ -1,0 +1,518 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Quitar objetos de imagen" noindex>
+  <section class="tool">
+    <h1>🧹 Quitar objetos de imagen</h1>
+    <p>
+      Selecciona personas, rocas u otros objetos con el <strong>pincel</strong>
+      (pinta sobre ellos) o usa el botón <strong>✨ Auto</strong> y haz clic sobre
+      el objeto. La IA rellena la zona con el entorno y descargas la imagen
+      limpia. Esta sección es <strong>exclusiva para usuarios registrados</strong>.
+    </p>
+
+    <form id="obj-form" class="upload-form" autocomplete="off">
+      <label class="field">
+        <span>Elige una imagen (PNG, JPG, WebP…)</span>
+        <input id="file-input" type="file" name="files" accept="image/*" required />
+      </label>
+      <p id="status" class="status" role="status"></p>
+
+      <div id="editor" class="obj-editor" hidden>
+        <div id="obj-wrap" class="obj-canvas-wrap">
+          <img id="obj-img" alt="Imagen a editar" hidden />
+          <canvas id="obj-overlay" class="obj-mask"></canvas>
+        </div>
+
+        <div class="obj-tools">
+          <label class="obj-field">
+            <span>Tamaño de pincel: <strong id="brush-val">24</strong> px</span>
+            <input id="brush-size" type="range" min="4" max="120" value="24" />
+          </label>
+          <label class="obj-check">
+            <input id="eraser" type="checkbox" /> Borrador
+          </label>
+          <div class="obj-btns">
+            <button type="button" id="btn-auto" class="btn-outline">✨ Auto (clic en el objeto)</button>
+            <button type="button" id="btn-undo" class="btn-outline">↩ Deshacer</button>
+            <button type="button" id="btn-clear" class="btn-outline">Limpiar</button>
+          </div>
+        </div>
+
+        <button type="submit" id="btn-process" class="btn-primary">Quitar objeto</button>
+      </div>
+    </form>
+
+    <div id="result" class="obj-result" hidden>
+      <h2>Resultado</h2>
+      <img id="result-img" class="obj-preview" alt="Imagen sin el objeto" />
+      <p id="result-status" class="status"></p>
+      <div class="obj-result-actions">
+        <a id="result-link" class="btn-download" href="#">Descargar PNG</a>
+        <button type="button" id="btn-another" class="btn-outline">Quitar otro objeto</button>
+      </div>
+    </div>
+  </section>
+</Layout>
+
+<style>
+  .obj-preview {
+    max-width: 100%;
+    max-height: 320px;
+    border-radius: var(--radius);
+    border: 1px dashed var(--muted);
+    margin-top: 0.75rem;
+  }
+  .obj-result {
+    margin-top: 1rem;
+    background: var(--surface);
+    color: var(--text);
+    border-radius: var(--radius);
+    padding: 1.25rem;
+    box-shadow: var(--shadow);
+  }
+  .obj-result h2 { margin: 0 0 0.5rem; font-size: 1.1rem; }
+  .obj-result-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+    margin-top: 0.5rem;
+  }
+  .obj-editor { margin-top: 0.75rem; }
+  .obj-canvas-wrap {
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+    margin: 0.75rem 0;
+    line-height: 0;
+  }
+  .obj-canvas-wrap img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--radius);
+    border: 1px dashed var(--muted);
+  }
+  .obj-mask {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    cursor: crosshair;
+    touch-action: none;
+    border-radius: var(--radius);
+  }
+  .obj-tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: center;
+    margin: 0.5rem 0 0.75rem;
+  }
+  .obj-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.85rem;
+  }
+  .obj-field input[type='range'] { width: 160px; }
+  .obj-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.9rem;
+    background: var(--surface);
+    border: 1px solid #d1d5db;
+    border-radius: 999px;
+    padding: 0.35rem 0.75rem;
+  }
+  .obj-btns { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+</style>
+
+<script>
+  /** Acceso tipado a elementos del DOM (lanza si no existen). */
+  const $ = <T extends HTMLElement>(id: string): T => {
+    const el = document.getElementById(id);
+    if (!el) throw new Error(`Elemento #${id} no encontrado`);
+    return el as T;
+  };
+
+  /** Mensaje de un error desconocido (catch). */
+  const errMsg = (err: unknown): string =>
+    err instanceof Error ? err.message : 'Error inesperado.';
+
+  /** Lado mayor máximo del lienzo (coherente con el backend / rendimiento LaMa). */
+  const MAX_SIDE = 2048;
+
+  async function main() {
+    const form = $<HTMLFormElement>('obj-form');
+    const fileInput = $<HTMLInputElement>('file-input');
+    const status = $<HTMLParagraphElement>('status');
+    const editor = $<HTMLDivElement>('editor');
+    const imgEl = $<HTMLImageElement>('obj-img');
+    const overlayEl = $<HTMLCanvasElement>('obj-overlay');
+    const brushRange = $<HTMLInputElement>('brush-size');
+    const brushVal = $<HTMLElement>('brush-val');
+    const eraserEl = $<HTMLInputElement>('eraser');
+    const btnAuto = $<HTMLButtonElement>('btn-auto');
+    const btnUndo = $<HTMLButtonElement>('btn-undo');
+    const btnClear = $<HTMLButtonElement>('btn-clear');
+    const btnProcess = $<HTMLButtonElement>('btn-process');
+    const result = $<HTMLDivElement>('result');
+
+    // 1) Verificar sesión (redirige a login si no hay sesión)
+    let me: { user: { id: number; email: string } | null } | null = null;
+    try {
+      const r = await fetch('/api/auth/me', { credentials: 'include' });
+      me = await r.json();
+    } catch {
+      /* sin sesión */
+    }
+    if (!me || !me.user) {
+      location.href = '/login';
+      return;
+    }
+
+    // ── Estado del editor ────────────────────────────────────
+    let currentFile: File | null = null; // original (alta resolución)
+    let imageW = 0;
+    let imageH = 0; // dimensiones reales del lienzo (imagen limitada a 2048px)
+    let drawing = false;
+    let autoArmed = false;
+
+    // Lienzo visible (máscara roja) + lienzo interno (máscara blanco/negro).
+    // willReadFrequently: hasMask()/undo leen píxeles con getImageData a menudo.
+    const overlay = overlayEl.getContext('2d', { willReadFrequently: true })!;
+    const maskOff = document.createElement('canvas');
+    const maskCtx = maskOff.getContext('2d', { willReadFrequently: true })!;
+
+    // Imagen base (resolución de trabajo) usada para el "Auto".
+    const baseCanvas = document.createElement('canvas');
+    const baseCtx = baseCanvas.getContext('2d')!;
+
+    // Pila de deshacer (instantáneas de ambos lienzos).
+    const undoStack: { overlay: ImageData; mask: ImageData }[] = [];
+
+    function pushUndo() {
+      undoStack.push({
+        overlay: overlay.getImageData(0, 0, imageW, imageH),
+        mask: maskCtx.getImageData(0, 0, imageW, imageH)
+      });
+      if (undoStack.length > 50) undoStack.shift();
+    }
+
+    function undo() {
+      const snap = undoStack.pop();
+      if (!snap) return;
+      overlay.putImageData(snap.overlay, 0, 0);
+      maskCtx.putImageData(snap.mask, 0, 0);
+    }
+
+    function clearMask() {
+      pushUndo();
+      overlay.clearRect(0, 0, imageW, imageH);
+      maskCtx.globalCompositeOperation = 'source-over';
+      maskCtx.fillStyle = '#000';
+      maskCtx.fillRect(0, 0, imageW, imageH);
+    }
+
+    function hasMask(): boolean {
+      const d = overlay.getImageData(0, 0, imageW, imageH).data;
+      for (let i = 3; i < d.length; i += 4) {
+        if (d[i] > 0) return true;
+      }
+      return false;
+    }
+
+    // Pinta un trazo en el overlay (rojo) y en la máscara interna (blanco).
+    function strokeAt(mx: number, my: number, size: number) {
+      const erasing = eraserEl.checked;
+      const radius = Math.max(1, size);
+
+      overlay.globalCompositeOperation = erasing ? 'destination-out' : 'source-over';
+      overlay.strokeStyle = 'rgba(239, 68, 68, 0.95)';
+      overlay.lineWidth = radius;
+      overlay.lineCap = 'round';
+      overlay.lineJoin = 'round';
+      overlay.beginPath();
+      overlay.moveTo(prevX, prevY);
+      overlay.lineTo(mx, my);
+      overlay.stroke();
+
+      maskCtx.globalCompositeOperation = 'source-over';
+      maskCtx.strokeStyle = erasing ? '#000' : '#fff';
+      maskCtx.lineWidth = radius;
+      maskCtx.lineCap = 'round';
+      maskCtx.lineJoin = 'round';
+      maskCtx.beginPath();
+      maskCtx.moveTo(prevX, prevY);
+      maskCtx.lineTo(mx, my);
+      maskCtx.stroke();
+
+      prevX = mx;
+      prevY = my;
+    }
+
+    let prevX = 0;
+    let prevY = 0;
+
+    const toMaskCoords = (e: PointerEvent): { mx: number; my: number } => {
+      const rect = overlayEl.getBoundingClientRect();
+      return {
+        mx: (e.clientX - rect.left) * (imageW / rect.width),
+        my: (e.clientY - rect.top) * (imageH / rect.height)
+      };
+    };
+
+    const brushSizeInImagePx = (): number => {
+      const rect = overlayEl.getBoundingClientRect();
+      return Number(brushRange.value) * (imageW / (rect.width || imageW));
+    };
+
+    // ── 2) Cargar la imagen al lienzo ────────────────────────
+    async function loadImage(file: File) {
+      const url = URL.createObjectURL(file);
+      const im = new Image();
+      await new Promise<void>((resolve, reject) => {
+        im.onload = () => resolve();
+        im.onerror = () => reject(new Error('No se pudo leer la imagen.'));
+        im.src = url;
+      });
+
+      // Limita el lado mayor (rendimiento de LaMa y del lienzo).
+      const maxDim = Math.max(im.naturalWidth, im.naturalHeight);
+      const s = Math.min(1, MAX_SIDE / maxDim);
+      imageW = Math.round(im.naturalWidth * s);
+      imageH = Math.round(im.naturalHeight * s);
+
+      // Configura los lienzos a la resolución de trabajo (el CSS escala la
+      // visualización al ancho disponible manteniendo el aspecto; el lienzo
+      // overlay queda exactamente sobre la imagen con .obj-mask inset:0).
+      overlayEl.width = imageW;
+      overlayEl.height = imageH;
+      maskOff.width = imageW;
+      maskOff.height = imageH;
+      baseCanvas.width = imageW;
+      baseCanvas.height = imageH;
+
+      imgEl.src = url;
+      imgEl.width = imageW;
+      imgEl.height = imageH;
+      imgEl.hidden = false;
+
+      baseCtx.drawImage(im, 0, 0, imageW, imageH);
+      clearMask();
+
+      prevX = 0;
+      prevY = 0;
+      undoStack.length = 0;
+      autoArmed = false;
+      btnAuto.textContent = '✨ Auto (clic en el objeto)';
+      editor.hidden = false;
+      status.textContent = 'Pinta sobre el objeto a quitar o pulsa ✨ Auto y haz clic sobre él.';
+      status.classList.remove('error');
+    }
+
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files && fileInput.files[0];
+      if (!file) return;
+      result.hidden = true;
+      currentFile = file;
+      loadImage(file).catch((err: unknown) => {
+        status.textContent = errMsg(err);
+        status.classList.add('error');
+      });
+    });
+
+    // ── 3) Pincel (ratón + táctil) ───────────────────────────
+    overlayEl.addEventListener('pointerdown', (e) => {
+      if (autoArmed) {
+        // Modo Auto: este clic selecciona el objeto → se genera la máscara.
+        handleAutoClick(e);
+        return;
+      }
+      e.preventDefault();
+      overlayEl.setPointerCapture(e.pointerId);
+      drawing = true;
+      pushUndo();
+      const { mx, my } = toMaskCoords(e);
+      prevX = mx;
+      prevY = my;
+      strokeAt(mx, my, brushSizeInImagePx());
+    });
+
+    overlayEl.addEventListener('pointermove', (e) => {
+      if (!drawing) return;
+      e.preventDefault();
+      const { mx, my } = toMaskCoords(e);
+      strokeAt(mx, my, brushSizeInImagePx());
+    });
+
+    const stopDrawing = () => {
+      drawing = false;
+    };
+    overlayEl.addEventListener('pointerup', stopDrawing);
+    overlayEl.addEventListener('pointercancel', stopDrawing);
+
+    brushRange.addEventListener('input', () => {
+      brushVal.textContent = brushRange.value;
+    });
+
+    btnUndo.addEventListener('click', () => {
+      undo();
+    });
+
+    btnClear.addEventListener('click', () => {
+      clearMask();
+      status.textContent = 'Máscara borrada. Pinta de nuevo o usa Auto.';
+      status.classList.remove('error');
+    });
+
+    // ── 4) Máscara automática por clic ───────────────────────
+    btnAuto.addEventListener('click', () => {
+      autoArmed = !autoArmed;
+      btnAuto.textContent = autoArmed
+        ? '✋ Clic sobre el objeto… (cancelar)'
+        : '✨ Auto (clic en el objeto)';
+      if (autoArmed) {
+        status.textContent = 'Haz clic sobre el objeto que quieres quitar.';
+        status.classList.remove('error');
+      }
+    });
+
+    async function handleAutoClick(e: PointerEvent) {
+      e.preventDefault();
+      autoArmed = false;
+      btnAuto.textContent = '✨ Auto (clic en el objeto)';
+      const { mx, my } = toMaskCoords(e);
+      const x = Math.round(mx);
+      const y = Math.round(my);
+      status.textContent = 'Generando máscara automática…';
+      status.classList.remove('error');
+      try {
+        const blob = await new Promise<Blob>((resolve, reject) => {
+          baseCanvas.toBlob(
+            (b) => (b ? resolve(b) : reject(new Error('No se pudo preparar la imagen.'))),
+            'image/png'
+          );
+        });
+        const fd = new FormData();
+        fd.append('files', blob, 'imagen.png');
+        fd.append('x', String(x));
+        fd.append('y', String(y));
+        const res = await fetch('/api/inpaint/auto-mask', {
+          method: 'POST',
+          body: fd,
+          credentials: 'include'
+        });
+        if (!res.ok) {
+          const b = await res.json().catch(() => ({}));
+          throw new Error((b as { error?: string }).error || 'No se pudo generar la máscara.');
+        }
+        const maskUrl = URL.createObjectURL(await res.blob());
+        const maskImg = new Image();
+        await new Promise<void>((resolve, reject) => {
+          maskImg.onload = () => resolve();
+          maskImg.onerror = () => reject(new Error('No se pudo leer la máscara.'));
+          maskImg.src = maskUrl;
+        });
+
+        // Compone la máscara devuelta en rojo (overlay) y en blanco (interna).
+        pushUndo();
+        const tmp = document.createElement('canvas');
+        tmp.width = imageW;
+        tmp.height = imageH;
+        const tctx = tmp.getContext('2d')!;
+        tctx.drawImage(maskImg, 0, 0, imageW, imageH);
+        const d = tctx.getImageData(0, 0, imageW, imageH);
+        const data = d.data;
+        for (let i = 0; i < data.length; i += 4) {
+          if (data[i + 3] > 0) {
+            data[i] = 239;
+            data[i + 1] = 68;
+            data[i + 2] = 68;
+            data[i + 3] = 200;
+          }
+        }
+        tctx.putImageData(d, 0, 0);
+        overlay.drawImage(tmp, 0, 0);
+        maskCtx.globalCompositeOperation = 'source-over';
+        maskCtx.drawImage(maskImg, 0, 0, imageW, imageH);
+
+        status.textContent =
+          'Máscara generada. Puedes ajustarla con el pincel o el borrador y pulsar "Quitar objeto".';
+      } catch (err) {
+        status.textContent = errMsg(err);
+        status.classList.add('error');
+      }
+    }
+
+    // ── 5) Quitar el objeto ──────────────────────────────────
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      status.textContent = '';
+      status.classList.remove('error');
+      result.hidden = true;
+
+      if (!currentFile) {
+        status.textContent = 'Selecciona una imagen primero.';
+        status.classList.add('error');
+        return;
+      }
+      if (!hasMask()) {
+        status.textContent = 'Pinta sobre el objeto a quitar o usa ✨ Auto primero.';
+        status.classList.add('error');
+        return;
+      }
+
+      btnProcess.disabled = true;
+      btnProcess.textContent = 'Quitando objeto… (puede tardar unos segundos)';
+
+      try {
+        const maskBlob = await new Promise<Blob>((resolve, reject) => {
+          maskOff.toBlob(
+            (b) => (b ? resolve(b) : reject(new Error('No se pudo generar la máscara.'))),
+            'image/png'
+          );
+        });
+        const fd = new FormData();
+        fd.append('files', currentFile);
+        fd.append('mask', maskBlob, 'mascara.png');
+        const res = await fetch('/api/inpaint', {
+          method: 'POST',
+          body: fd,
+          credentials: 'include'
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error((body as { error?: string }).error || 'No se pudo quitar el objeto.');
+        }
+
+        const url = `/api/convert/${(body as { id: number }).id}/download`;
+        $<HTMLImageElement>('result-img').src = url;
+        $<HTMLAnchorElement>('result-link').href = url;
+        $<HTMLParagraphElement>('result-status').textContent =
+          'Objeto eliminado. Guardado en tu historial.';
+        result.hidden = false;
+      } catch (err) {
+        status.textContent = errMsg(err);
+        status.classList.add('error');
+      } finally {
+        btnProcess.disabled = false;
+        btnProcess.textContent = 'Quitar objeto';
+      }
+    });
+
+    // "Quitar otro objeto": limpia la máscara y vuelve a editar.
+    $<HTMLButtonElement>('btn-another').addEventListener('click', () => {
+      result.hidden = true;
+      clearMask();
+      status.textContent = 'Pinta sobre otro objeto o usa ✨ Auto.';
+      status.classList.remove('error');
+    });
+  }
+
+  main();
+</script>

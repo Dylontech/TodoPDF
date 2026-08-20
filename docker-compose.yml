@@ -67,6 +67,11 @@ services:
       TODOPDF_VECTORIZE_PYTHON: /opt/rembg/bin/python
       TODOPDF_VECTORIZE_TIMEOUT_MS: ${TODOPDF_VECTORIZE_TIMEOUT_MS:-120000}
       TODOPDF_VECTORIZE_CONCURRENCY: ${TODOPDF_VECTORIZE_CONCURRENCY:-1}
+      # Quitar objetos de imagen (LaMa big-lama ONNX, solo autenticados)
+      TODOPDF_INPAINT_PYTHON: /opt/rembg/bin/python
+      TODOPDF_INPAINT_MODEL: /models/big-lama.onnx
+      TODOPDF_INPAINT_TIMEOUT_MS: ${TODOPDF_INPAINT_TIMEOUT_MS:-180000}
+      TODOPDF_INPAINT_CONCURRENCY: ${TODOPDF_INPAINT_CONCURRENCY:-1}
       # Storage (montado como volumen)
       TODOPDF_STORAGE_DIR: /data/storage
       TODOPDF_TEMP_DIR: /data/tmp

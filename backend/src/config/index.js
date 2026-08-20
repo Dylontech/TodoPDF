@@ -125,6 +125,22 @@ const config = {
     timeoutMs: Number(process.env.TODOPDF_VECTORIZE_TIMEOUT_MS || 120_000),
     // Procesamientos simultáneos (protege la RAM/CPU del servidor)
     maxConcurrency: Number(process.env.TODOPDF_VECTORIZE_CONCURRENCY || 1)
+  },
+
+  // ── Quitar objetos de imagen (LaMa big-lama ONNX, solo autenticados) ──
+  inpaint: {
+    // Python con onnxruntime/opencv/rembg (mismo venv que removeBg/vectorize)
+    pythonPath: process.env.TODOPDF_INPAINT_PYTHON || 'python3',
+    // Script Python de inpainting (imagen por stdin + máscara por archivo)
+    scriptPath: path.join(__dirname, '../../scripts/inpaint.py'),
+    // Script Python de máscara automática por clic (flood fill + u2net)
+    autoMaskScriptPath: path.join(__dirname, '../../scripts/auto_mask.py'),
+    // Ruta al modelo ONNX big-lama (local: backend/.models/, Docker: /models)
+    modelPath: process.env.TODOPDF_INPAINT_MODEL || '',
+    // Tiempo máximo por imagen (la inferencia de LaMa en CPU es lenta)
+    timeoutMs: Number(process.env.TODOPDF_INPAINT_TIMEOUT_MS || 180_000),
+    // Procesamientos simultáneos (protege la RAM/CPU del servidor)
+    maxConcurrency: Number(process.env.TODOPDF_INPAINT_CONCURRENCY || 1)
   }
 };
 
