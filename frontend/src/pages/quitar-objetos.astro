@@ -176,7 +176,8 @@ import Layout from '../layouts/Layout.astro';
     }
 
     // ── Estado del editor ────────────────────────────────────
-    let currentFile: File | null = null; // original (alta resolución)
+    let currentFile: File | null = null; // nombre original (para la salida)
+    let workingBlob: Blob | null = null; // imagen orientada y ajustada (se envía)
     let imageW = 0;
     let imageH = 0; // dimensiones reales del lienzo (imagen limitada a 2048px)
     let drawing = false;
@@ -273,19 +274,38 @@ import Layout from '../layouts/Layout.astro';
 
     // ── 2) Cargar la imagen al lienzo ────────────────────────
     async function loadImage(file: File) {
-      const url = URL.createObjectURL(file);
-      const im = new Image();
-      await new Promise<void>((resolve, reject) => {
-        im.onload = () => resolve();
-        im.onerror = () => reject(new Error('No se pudo leer la imagen.'));
-        im.src = url;
-      });
+      // Carga la imagen aplicando la orientación EXIF (fotos de móvil): el
+      // bitmap resultante ya viene girado, así que imagen, lienzo y máscara
+      // coinciden siempre sin deformaciones. Fallback a <img> en navegadores
+      // sin createImageBitmap con opciones.
+      let im: ImageBitmap | HTMLImageElement;
+      let w = 0;
+      let h = 0;
+      let isBitmap = false;
+      try {
+        const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
+        im = bmp;
+        w = bmp.width;
+        h = bmp.height;
+        isBitmap = true;
+      } catch {
+        const el = new Image();
+        const url = URL.createObjectURL(file);
+        await new Promise<void>((resolve, reject) => {
+          el.onload = () => resolve();
+          el.onerror = () => reject(new Error('No se pudo leer la imagen.'));
+          el.src = url;
+        });
+        im = el;
+        w = el.naturalWidth;
+        h = el.naturalHeight;
+      }
 
       // Limita el lado mayor (rendimiento de LaMa y del lienzo).
-      const maxDim = Math.max(im.naturalWidth, im.naturalHeight);
+      const maxDim = Math.max(w, h);
       const s = Math.min(1, MAX_SIDE / maxDim);
-      imageW = Math.round(im.naturalWidth * s);
-      imageH = Math.round(im.naturalHeight * s);
+      imageW = Math.round(w * s);
+      imageH = Math.round(h * s);
 
       // Configura los lienzos a la resolución de trabajo (el CSS escala la
       // visualización al ancho disponible manteniendo el aspecto; el lienzo
@@ -297,12 +317,23 @@ import Layout from '../layouts/Layout.astro';
       baseCanvas.width = imageW;
       baseCanvas.height = imageH;
 
-      imgEl.src = url;
+      baseCtx.drawImage(im, 0, 0, imageW, imageH);
+      if (isBitmap) (im as ImageBitmap).close();
+
+      // Previsualización y archivo de trabajo: el mismo bitmap orientado y
+      // ajustado que se envía al backend → imagen, lienzo y máscara comparten
+      // exactamente las mismas dimensiones y orientación.
+      workingBlob = await new Promise<Blob>((resolve, reject) => {
+        baseCanvas.toBlob(
+          (b) => (b ? resolve(b) : reject(new Error('No se pudo preparar la imagen.'))),
+          'image/png'
+        );
+      });
+      imgEl.src = URL.createObjectURL(workingBlob);
       imgEl.width = imageW;
       imgEl.height = imageH;
       imgEl.hidden = false;
 
-      baseCtx.drawImage(im, 0, 0, imageW, imageH);
       clearMask();
 
       prevX = 0;
@@ -456,7 +487,7 @@ import Layout from '../layouts/Layout.astro';
       status.classList.remove('error');
       result.hidden = true;
 
-      if (!currentFile) {
+      if (!currentFile || !workingBlob) {
         status.textContent = 'Selecciona una imagen primero.';
         status.classList.add('error');
         return;
@@ -478,7 +509,9 @@ import Layout from '../layouts/Layout.astro';
           );
         });
         const fd = new FormData();
-        fd.append('files', currentFile);
+        // Se envía la imagen ya orientada/ajustada (workingBlob) para que
+        // coincida exactamente con la máscara (mismas dimensiones y rotación).
+        fd.append('files', workingBlob, currentFile.name);
         fd.append('mask', maskBlob, 'mascara.png');
         const res = await fetch('/api/inpaint', {
           method: 'POST',
