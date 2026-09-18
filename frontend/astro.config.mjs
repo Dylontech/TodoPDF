@@ -13,10 +13,14 @@ const PRIVATE_PATHS = new Set([
   '/login',
   '/register',
   '/historial',
+  '/convertir-documento',
   '/descargar-videos',
   '/quitar-fondo',
   '/imagen-a-vectorial',
-  '/quitar-objetos'
+  '/quitar-objetos',
+  '/flashcards',
+  // Visor de un mazo compartido: solo tiene sentido con un token en la URL
+  '/flashcard'
 ]);
 
 export default defineConfig({

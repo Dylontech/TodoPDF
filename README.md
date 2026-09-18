@@ -13,7 +13,8 @@ Aplicación web **autoalojada** estilo iLovePDF con un enfoque estricto en la **
 | PDF → Imágenes     | Ghostscript por pipes, ZIP en memoria     | Guarda JPG/PNG… en volumen + historial |
 | Imágenes → PDF     | sharp + pdf-lib en Buffers, PDF en memoria | Guarda PDF en volumen + historial      |
 | PDF → Office (DOCX/DOC/ODT/PPTX/PPT) | LibreOffice + pptxgenjs en temp aislado | Guarda documento en volumen + historial |
-| Office → PDF (DOCX/DOC/XLSX/PPTX/PPT/ODT) | LibreOffice en temp aislado | Guarda PDF en volumen + historial |
+| Office → PDF (DOC/DOCX/ODT/RTF/TXT/XLS/XLSX/ODS/CSV/PPT/PPTX/ODP) | LibreOffice en temp aislado | Guarda PDF en volumen + historial |
+| Convertir documento (Office → Office) | — (exclusivo de usuarios registrados) | LibreOffice en temp aislado; guarda el documento en volumen + historial |
 
 ## Flujos de privacidad
 
@@ -68,6 +69,60 @@ de una imagen y rellena la zona con el entorno (inpainting) gracias al modelo **
   `big-lama.onnx` — export oficial de OpenCV `inpainting_lama`, ~92MB — descargado en el
   build de Docker a `/models/`).
 - Frontend: `/quitar-objetos` (el enlace solo aparece en la barra de navegación con sesión iniciada).
+
+## Convertir documento (Office ↔ Office, solo usuarios registrados)
+
+Sección **exclusiva para cuentas con sesión iniciada** que convierte un documento de Office a
+cualquier otro formato de su misma familia gracias a **LibreOffice headless**.
+
+- De formatos **antiguos a modernos**: **DOC → DOCX**, **ODT → DOCX**, **RTF → DOCX**, **TXT → DOCX**,
+  **XLS → XLSX**, **ODS → XLSX**, **CSV → XLSX**, **PPT → PPTX**, **ODP → PPTX**.
+- Y también al contrario (DOCX → ODT, XLSX → ODS, PPTX → ODP…) o a **PDF**.
+- El tipo del archivo se detecta por su **contenido** (magic bytes), no por la extensión. Los
+  `.doc`/`.xls`/`.ppt` comparten el mismo contenedor binario (CFB), así que se distinguen
+  inspeccionando sus streams internos.
+- Un documento solo se convierte dentro de su familia (un DOCX no puede convertirse a XLSX).
+- Los resultados se guardan en el volumen del usuario y quedan registrados en su historial
+  (`/historial`), con descarga vía `/api/convert/:id/download`.
+- Todos los endpoints exigen sesión; LibreOffice trabaja en un **directorio temporal aislado**
+  que se elimina siempre y con **concurrencia limitada** (1 conversión a la vez).
+- Backend: `POST /api/convert/office-to-office` (multipart `files` + `format`).
+- Frontend: `/convertir-documento` (el selector de formato de salida se ajusta al tipo del archivo
+  subido; el enlace solo aparece en la barra de navegación con sesión iniciada).
+
+## Creador de flashcards (solo usuarios registrados)
+
+Sección **exclusiva para cuentas con sesión iniciada** para crear tarjetas de estudio
+(**término + definición**, con una **ilustración opcional**).
+
+- **Biblioteca de ilustraciones propia**: 36 dibujos SVG repartidos en 6 categorías
+  (Animales, Comida, Viaje, Ciencia, Colegio y Música), con buscador y filtro por categoría.
+  Es la única fuente de verdad: la usa el editor y también la exportación.
+- **Estudiar** (en el navegador): tarjeta giratoria, navegación ‹ ›, orden aleatorio,
+  valoración «ya la sabía» / «repasar» y resumen final con repaso de las falladas.
+- **Compartir**: genera un **enlace público revocable** (`/flashcard?m=<token>`) con el que
+  cualquiera puede ver, estudiar y exportar el mazo **sin cuenta**. El enlace no expone datos
+  del dueño y se puede revocar cuando se quiera.
+- **Exportar** a **PDF** y **PowerPoint (PPTX)**: una portada y **una tarjeta por página**
+  (A6 vertical, 105 × 148 mm), listas para imprimir.
+- Los mazos se guardan en la base de datos y las exportaciones en el **historial** del usuario
+  (`/historial`, tipos `flashcards-to-pdf` y `flashcards-to-pptx`), con descarga vía
+  `/api/convert/:id/download`. La exportación desde un enlace público se sirve en RAM y no se
+  registra en ningún historial.
+- Backend: `GET/POST /api/flashcards`, `GET/PUT/DELETE /api/flashcards/:id`,
+  `POST/DELETE /api/flashcards/:id/share`, `POST /api/flashcards/:id/export/{pdf|pptx}`,
+  `GET /api/flashcards/library` y `GET /api/flashcards/share/:token[/export/:format]`
+  (las dos últimas son públicas).
+- Motor del PDF: **pdf-lib** con una fuente TTF embebida (DejaVu; Noto como alternativa) para
+  acentos, eñes y símbolos. Si el mazo usa caracteres que esa fuente no cubre (emoji, CJK…),
+  el PDF se genera con **LibreOffice** a partir del PPTX (que trae tipografías Noto).
+  El PPTX lo produce **pptxgenjs**, todo en memoria.
+- Frontend: `/flashcards` (mis mazos, editor y modo estudiar) y `/flashcard?m=<token>`
+  (visor público). El enlace de la herramienta solo aparece en la barra de navegación con
+  sesión iniciada.
+- En local, el PDF usa `/usr/share/fonts/TTF/DejaVuSans.ttf` y en Docker
+  `/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf` (`fonts-dejavu-core`, ya en la imagen);
+  se puede forzar otra fuente con `TODOPDF_FLASHCARDS_FONT`.
 
 ## Requisitos
 
@@ -264,6 +319,7 @@ Con ese flag, la respuesta 500 incluye `code` y `message` reales (p. ej.
 | POST   | `/api/convert/images-to-pdf`     | `multipart` campo `files` (hasta 10)              |
 | POST   | `/api/convert/pdf-to-office`     | `multipart` campo `files` (1) + `format` (`docx`\|`doc`\|`odt`\|`pptx`\|`ppt`) |
 | POST   | `/api/convert/office-to-pdf`     | `multipart` campo `files` (1): DOCX/DOC/XLSX/PPTX/PPT/ODT |
+| POST   | `/api/convert/office-to-office`  | `multipart` campo `files` (1) + `format` (`docx`\|`odt`\|`doc`\|`rtf`\|`txt`\|`xlsx`\|`ods`\|`xls`\|`csv`\|`pptx`\|`odp`\|`ppt`\|`pdf`) — solo usuarios con sesión |
 | GET    | `/api/convert/:id/download`      | Descarga una conversión guardada (solo dueño)     |
 | GET    | `/api/history`                   | Historial de conversiones del usuario (solo auth) |
 | POST   | `/api/downloader/info`           | Metadata de un vídeo (solo auth, `{ url }`)        |

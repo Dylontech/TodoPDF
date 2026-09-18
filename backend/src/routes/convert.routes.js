@@ -8,6 +8,7 @@ const {
   convertImagesToPdf,
   convertPdfToOffice,
   convertOfficeToPdf,
+  convertOfficeToOffice,
   download
 } = require('../controllers/convertController');
 
@@ -25,6 +26,10 @@ router.post('/convert/pdf-to-office', uploadFiles('files', 1), convertPdfToOffic
 
 // Office → PDF (1 archivo; el formato de entrada se detecta por magic bytes).
 router.post('/convert/office-to-pdf', uploadFiles('files', 1), convertOfficeToPdf);
+
+// Office → Office (1 archivo + `format` de salida: docx|odt|doc|rtf|txt|xlsx|ods|xls|csv|pptx|odp|ppt|pdf).
+// Solo usuarios con sesión: el resultado se guarda en su volumen y en el historial.
+router.post('/convert/office-to-office', requireAuth, uploadFiles('files', 1), convertOfficeToOffice);
 
 // Descarga de una conversión guardada (solo el dueño).
 router.get('/convert/:id/download', requireAuth, download);

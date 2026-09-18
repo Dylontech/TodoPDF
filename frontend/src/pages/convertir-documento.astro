@@ -1,0 +1,94 @@
+---
+import Layout from '../layouts/Layout.astro';
+import UploadForm from '../components/UploadForm.astro';
+import type { FieldOption } from '../lib/formTypes';
+
+// ── Matriz de conversiones ──────────────────────────────────
+// Debe coincidir con backend/src/services/conversion/officeFormats.js.
+// Cada opción declara para qué archivos de ENTRADA es válida (`inputs`).
+// El ORDEN importa: se ofrece por defecto la primera opción disponible, así
+// que los formatos modernos van antes que los antiguos (DOC → DOCX,
+// ODT → DOCX, XLS → XLSX, PPT → PPTX…).
+const WRITER = ['doc', 'docx', 'odt', 'rtf', 'txt'];
+const CALC = ['xls', 'xlsx', 'ods', 'csv'];
+const IMPRESS = ['ppt', 'pptx', 'odp'];
+const TODOS = [...WRITER, ...CALC, ...IMPRESS];
+
+const formats: FieldOption[] = [
+  // Procesador de textos
+  { value: 'docx', label: 'DOCX (Word 2007+)', inputs: WRITER },
+  { value: 'odt', label: 'ODT (LibreOffice Writer)', inputs: WRITER },
+  { value: 'doc', label: 'DOC (Word 97-2003)', inputs: WRITER },
+  { value: 'rtf', label: 'RTF (texto enriquecido)', inputs: WRITER },
+  { value: 'txt', label: 'TXT (texto sin formato)', inputs: WRITER },
+  // Hojas de cálculo
+  { value: 'xlsx', label: 'XLSX (Excel 2007+)', inputs: CALC },
+  { value: 'ods', label: 'ODS (LibreOffice Calc)', inputs: CALC },
+  { value: 'xls', label: 'XLS (Excel 97-2003)', inputs: CALC },
+  { value: 'csv', label: 'CSV (separado por comas)', inputs: CALC },
+  // Presentaciones
+  { value: 'pptx', label: 'PPTX (PowerPoint 2007+)', inputs: IMPRESS },
+  { value: 'odp', label: 'ODP (LibreOffice Impress)', inputs: IMPRESS },
+  { value: 'ppt', label: 'PPT (PowerPoint 97-2003)', inputs: IMPRESS },
+  // Común a todas las familias
+  { value: 'pdf', label: 'PDF', inputs: TODOS }
+];
+---
+
+<Layout title="Convertir documento" noindex>
+  <section class="tool">
+    <h1>🔄 Convertir documento</h1>
+    <p>
+      Pasa tus documentos al formato que necesites: de los antiguos
+      (<strong>DOC, ODT, RTF, XLS, PPT</strong>…) a los modernos
+      (<strong>DOCX, XLSX, PPTX</strong>) y también al contrario, o a PDF.
+      Elige el archivo y el formato de salida; las opciones disponibles se
+      ajustan a su tipo. Esta sección es
+      <strong>exclusiva para usuarios registrados</strong>.
+    </p>
+
+    <div id="tool-gate" hidden>
+      <UploadForm
+        endpoint="/api/convert/office-to-office"
+        accept=".doc,.docx,.odt,.rtf,.txt,.xls,.xlsx,.ods,.csv,.ppt,.pptx,.odp"
+        formatSelector={true}
+        dynamicFormats={true}
+        formats={formats}
+        submitLabel="Convertir documento"
+      />
+      <p class="privacy-note">
+        ⚠️ La conversión usa un espacio de trabajo temporal en el servidor que se
+        elimina al terminar; el resultado se guarda en tu historial.
+        Hay conversiones «best effort»: TXT pierde el formato y CSV exporta
+        únicamente la primera hoja del libro.
+      </p>
+    </div>
+    <p id="gate-status" class="status">Comprobando sesión…</p>
+  </section>
+</Layout>
+
+<script>
+  const gate = document.getElementById('tool-gate');
+  const gateStatus = document.getElementById('gate-status');
+
+  async function main() {
+    // 1) Verificar sesión (redirige a login si no hay sesión)
+    let me: { user: { id: number; email: string } | null } | null = null;
+    try {
+      const r = await fetch('/api/auth/me', { credentials: 'include' });
+      me = await r.json();
+    } catch {
+      /* sin sesión */
+    }
+    if (!me || !me.user) {
+      location.href = '/login';
+      return;
+    }
+
+    // 2) Mostrar la herramienta (está oculta hasta confirmar la sesión)
+    if (gate) gate.hidden = false;
+    if (gateStatus) gateStatus.hidden = true;
+  }
+
+  main();
+</script>

@@ -1,0 +1,73 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Flashcards compartidas" noindex>
+  <section class="tool tool-wide">
+    <div id="fc-shared" hidden>
+      <div class="fc-toolbar">
+        <h1 id="fc-shared-title" class="fc-heading">Flashcards</h1>
+        <a class="btn-outline" href="/flashcards">Crear mis flashcards</a>
+      </div>
+      <p id="fc-shared-description" class="fc-shared-description"></p>
+
+      <div class="fc-deck-actions">
+        <button id="btn-shared-pdf" type="button" class="btn-outline">⬇️ Descargar PDF</button>
+        <button id="btn-shared-pptx" type="button" class="btn-outline">⬇️ Descargar PowerPoint</button>
+      </div>
+      <p id="fc-shared-status" class="status" role="status"></p>
+
+      <div id="fc-study-body"></div>
+    </div>
+
+    <p id="fc-loading" class="status">Cargando el mazo…</p>
+  </section>
+</Layout>
+
+<script>
+  import { $, errMsg, setStatus, fetchSharedDeck, createStudy } from '../lib/flashcards';
+
+  const token = new URLSearchParams(location.search).get('m') || '';
+
+  async function main(): Promise<void> {
+    const loading = $('fc-loading');
+
+    if (!token) {
+      setStatus(loading, 'Este enlace no incluye ninguna colección de flashcards.', true);
+      return;
+    }
+
+    try {
+      const deck = await fetchSharedDeck(token);
+      $('fc-shared-title').textContent = deck.title;
+      const description = $('fc-shared-description');
+      description.textContent = deck.description;
+      description.hidden = !deck.description;
+
+      createStudy(
+        $('fc-study-body'),
+        deck.cards.map((card) => ({
+          term: card.term,
+          definition: card.definition,
+          imageUrl: card.imageUrl
+        }))
+      );
+
+      const status = $('fc-shared-status');
+      const download = (format: 'pdf' | 'pptx'): void => {
+        setStatus(status, `Preparando el ${format === 'pdf' ? 'PDF' : 'PowerPoint'}…`);
+        location.href = `/api/flashcards/share/${encodeURIComponent(token)}/export/${format}`;
+        setTimeout(() => setStatus(status, 'La descarga empezará en unos segundos.'), 1500);
+      };
+      $<HTMLButtonElement>('btn-shared-pdf').addEventListener('click', () => download('pdf'));
+      $<HTMLButtonElement>('btn-shared-pptx').addEventListener('click', () => download('pptx'));
+
+      loading.hidden = true;
+      $('fc-shared').hidden = false;
+    } catch (err) {
+      setStatus(loading, errMsg(err), true);
+    }
+  }
+
+  void main();
+</script>

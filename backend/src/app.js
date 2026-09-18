@@ -18,6 +18,9 @@ const downloaderRoutes = require('./routes/downloader.routes');
 const removeBgRoutes = require('./routes/removeBg.routes');
 const vectorizeRoutes = require('./routes/vectorize.routes');
 const inpaintRoutes = require('./routes/inpaint.routes');
+const flashcardsRoutes = require('./routes/flashcards.routes');
+const flashcardLibraryRoutes = require('./routes/flashcardLibrary.routes');
+const flashcardShareRoutes = require('./routes/flashcardShare.routes');
 const { getDiagnostics } = require('./controllers/diagnosticsController');
 
 const app = express();
@@ -106,6 +109,34 @@ const inpaintLimiter = rateLimit({
   message: { error: 'Demasiadas peticiones de eliminación de objetos. Inténtalo más tarde.' }
 });
 
+// Flashcards: crear/editar mazos y exportar (el usuario ya está autenticado)
+const flashcardsLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiadas peticiones de flashcards. Inténtalo más tarde.' }
+});
+
+// Enlaces compartidos: público, con el mismo margen que el resto de herramientas
+const flashcardShareLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiadas peticiones. Inténtalo más tarde.' }
+});
+
+// Biblioteca de ilustraciones: una rejilla carga ~36 miniaturas de golpe, así
+// que este límite es a propósito mucho más generoso que el resto.
+const flashcardLibraryLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 600,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiadas peticiones de ilustraciones. Inténtalo más tarde.' }
+});
+
 // ── Rutas ────────────────────────────────────────────────────
 // Salud simple para orquestadores/healthchecks. Se declara ANTES de los
 // routers protegidos: los routers con requireAuth responderían 401 a
@@ -117,6 +148,11 @@ app.get('/api/health', (req, res) => res.json({ ok: true }));
 app.get('/api/diagnostics', getDiagnostics);
 
 app.use('/api/auth', authLimiter, authRoutes);
+// Flashcards: las rutas PÚBLICAS (biblioteca y enlaces compartidos) se montan
+// ANTES del router privado, que aplica requireAuth a todo su prefijo.
+app.use('/api/flashcards/library', flashcardLibraryLimiter, flashcardLibraryRoutes);
+app.use('/api/flashcards/share', flashcardShareLimiter, flashcardShareRoutes);
+app.use('/api/flashcards', flashcardsLimiter, flashcardsRoutes);
 app.use('/api', uploadLimiter, convertRoutes);
 app.use('/api', uploadLimiter, pdfToolsRoutes);
 app.use('/api', downloaderLimiter, downloaderRoutes);

@@ -1,0 +1,656 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Flashcards" noindex>
+  <section class="tool tool-wide">
+    <h1>🃏 Flashcards</h1>
+    <p>
+      Crea tus propias flashcards: añade un término, una definición y, si quieres,
+      una ilustración de nuestra biblioteca. Después podrás
+      <strong>estudiarlas</strong>, <strong>compartirlas</strong> con un enlace y
+      <strong>exportarlas</strong> a PDF o PowerPoint.
+      Esta sección es <strong>exclusiva para usuarios registrados</strong>.
+    </p>
+
+    <div id="fc-app" hidden>
+      <!-- ── Mis mazos ───────────────────────────────────── -->
+      <div id="fc-list-view">
+        <div class="fc-toolbar">
+          <h2 class="fc-heading">Mis mazos</h2>
+          <button id="btn-new-deck" type="button" class="btn-primary">＋ Crear mazo</button>
+        </div>
+        <p id="fc-list-status" class="status"></p>
+        <div id="fc-decks" class="fc-decks"></div>
+      </div>
+
+      <!-- ── Editor ──────────────────────────────────────── -->
+      <div id="fc-editor-view" hidden>
+        <div class="fc-toolbar">
+          <h2 class="fc-heading" id="fc-editor-title">Nuevo mazo</h2>
+          <button id="btn-editor-back" type="button" class="btn-outline">Volver a mis mazos</button>
+        </div>
+
+        <label class="field">
+          <span>Título del mazo</span>
+          <input id="fc-title" type="text" maxlength="255" placeholder="Ej. Animales en inglés" />
+        </label>
+        <label class="field">
+          <span>Descripción (opcional)</span>
+          <input id="fc-description" type="text" maxlength="1000" placeholder="Ej. Vocabulario básico de clase" />
+        </label>
+
+        <p class="fc-hint">
+          Cada tarjeta necesita un término y una definición. La ilustración es
+          opcional y se elige de la biblioteca (también se incluye en el PDF y en
+          el PowerPoint).
+        </p>
+
+        <div id="fc-cards-editor" class="fc-cards"></div>
+        <button id="btn-add-card" type="button" class="btn-outline">＋ Añadir tarjeta</button>
+
+        <div class="fc-editor-actions">
+          <button id="btn-save-deck" type="button" class="btn-primary">Guardar mazo</button>
+          <button id="btn-cancel-edit" type="button" class="btn-outline">Cancelar</button>
+        </div>
+        <p id="fc-editor-status" class="status" role="status"></p>
+      </div>
+
+      <!-- ── Estudiar ────────────────────────────────────── -->
+      <div id="fc-study-view" hidden>
+        <div class="fc-toolbar">
+          <h2 class="fc-heading" id="fc-study-title">Estudiar</h2>
+          <button id="btn-exit-study" type="button" class="btn-outline">Salir del estudio</button>
+        </div>
+        <div id="fc-study-body"></div>
+      </div>
+
+      <!-- ── Biblioteca de ilustraciones ─────────────────── -->
+      <div id="fc-picker" class="fc-picker" hidden>
+        <div class="fc-toolbar">
+          <strong>Biblioteca de ilustraciones</strong>
+          <button id="btn-picker-close" type="button" class="btn-outline">Cerrar</button>
+        </div>
+        <input id="fc-picker-search" type="search" placeholder="Buscar (perro, pizza, avión…)" />
+        <div id="fc-picker-tabs" class="fc-tabs"></div>
+        <div id="fc-picker-grid" class="fc-grid"></div>
+        <button id="btn-picker-remove" type="button" class="btn-outline">Quitar ilustración</button>
+      </div>
+    </div>
+
+    <p id="gate-status" class="status">Comprobando sesión…</p>
+  </section>
+</Layout>
+
+<script>
+  import {
+    $,
+    errMsg,
+    setStatus,
+    normalize,
+    formatDate,
+    fetchLibrary,
+    fetchDecks,
+    fetchDeck,
+    createDeck,
+    updateDeck,
+    deleteDeck,
+    setShare,
+    exportDeck,
+    exportDownloadUrl,
+    createStudy,
+    type DeckSummary,
+    type FlashcardInput,
+    type LibraryCategory,
+    type LibraryItem,
+    type StudyHandle
+  } from '../lib/flashcards';
+
+  // ── Estado ─────────────────────────────────────────────────
+  let decks: DeckSummary[] = [];
+  let library: LibraryCategory[] = [];
+  let editing: { id: number | null; title: string; description: string; cards: FlashcardInput[] } = {
+    id: null,
+    title: '',
+    description: '',
+    cards: []
+  };
+  let pickerTarget = -1;
+  let pickerCategory = 'todas';
+  let pickerQuery = '';
+  let study: StudyHandle | null = null;
+
+  const MAX_TERM = 200;
+  const MAX_DEFINITION = 1000;
+
+  // ── Arranque ───────────────────────────────────────────────
+  async function main(): Promise<void> {
+    if (!(await requireSession())) return;
+
+    $('fc-app').hidden = false;
+    $('gate-status').hidden = true;
+
+    try {
+      library = await fetchLibrary();
+    } catch {
+      library = [];
+    }
+    renderPickerTabs();
+    renderPickerGrid();
+    wireEvents();
+
+    await loadDecks();
+  }
+
+  /** Comprueba la sesión; si no hay, redirige a /login. */
+  async function requireSession(): Promise<boolean> {
+    try {
+      const res = await fetch('/api/auth/me', { credentials: 'include' });
+      const data = await res.json();
+      if (res.ok && data.user) return true;
+    } catch {
+      /* sin sesión */
+    }
+    location.href = '/login';
+    return false;
+  }
+
+  function wireEvents(): void {
+    $<HTMLButtonElement>('btn-new-deck').addEventListener('click', () => startEditor(null));
+    $<HTMLButtonElement>('btn-editor-back').addEventListener('click', () => showView('list'));
+    $<HTMLButtonElement>('btn-cancel-edit').addEventListener('click', () => showView('list'));
+    $<HTMLButtonElement>('btn-add-card').addEventListener('click', () => {
+      addCard();
+      renderCardsEditor();
+    });
+    $<HTMLButtonElement>('btn-save-deck').addEventListener('click', saveDeck);
+    $<HTMLButtonElement>('btn-exit-study').addEventListener('click', () => showView('list'));
+    $<HTMLButtonElement>('btn-picker-close').addEventListener('click', closePicker);
+    $<HTMLButtonElement>('btn-picker-remove').addEventListener('click', () => setCardImage(null));
+    $<HTMLInputElement>('fc-picker-search').addEventListener('input', (event) => {
+      pickerQuery = normalize((event.target as HTMLInputElement).value || '');
+      renderPickerGrid();
+    });
+  }
+
+  function showView(view: 'list' | 'editor' | 'study'): void {
+    $('fc-list-view').hidden = view !== 'list';
+    $('fc-editor-view').hidden = view !== 'editor';
+    $('fc-study-view').hidden = view !== 'study';
+    if (view !== 'editor') closePicker();
+    if (view !== 'study' && study) {
+      study.destroy();
+      study = null;
+    }
+    if (view === 'list') {
+      setStatus($('fc-editor-status'), '');
+      void loadDecks();
+    }
+  }
+
+  // ── Lista de mazos ─────────────────────────────────────────
+  async function loadDecks(): Promise<void> {
+    const status = $('fc-list-status');
+    setStatus(status, 'Cargando tus mazos…');
+    try {
+      decks = await fetchDecks();
+      renderDecks();
+      setStatus(
+        status,
+        decks.length === 0
+          ? 'Todavía no tienes mazos. Pulsa «Crear mazo» para empezar.'
+          : `${decks.length} ${decks.length === 1 ? 'mazo' : 'mazos'} en tu cuenta.`
+      );
+    } catch (err) {
+      setStatus(status, errMsg(err), true);
+    }
+  }
+
+  function renderDecks(): void {
+    const wrap = $('fc-decks');
+    wrap.innerHTML = '';
+
+    for (const deck of decks) {
+      const article = document.createElement('article');
+      article.className = 'fc-deck';
+
+      const title = document.createElement('h3');
+      title.textContent = deck.title;
+
+      const meta = document.createElement('p');
+      meta.className = 'fc-deck-meta';
+      meta.textContent = `${deck.cardCount} ${deck.cardCount === 1 ? 'tarjeta' : 'tarjetas'} · actualizado el ${formatDate(deck.updatedAt)}${deck.shareToken ? ' · 🔗 compartido' : ''}`;
+
+      const description = document.createElement('p');
+      description.className = 'fc-deck-desc';
+      description.textContent = deck.description || '';
+
+      const result = document.createElement('p');
+      result.className = 'status fc-result';
+
+      const shareBox = document.createElement('div');
+      shareBox.className = 'fc-share';
+      shareBox.hidden = true;
+
+      const actions = document.createElement('div');
+      actions.className = 'fc-deck-actions';
+      actions.append(
+        button('Estudiar', 'btn-primary', () => startStudy(deck.id)),
+        button('Editar', 'btn-outline', () => startEditor(deck.id)),
+        button('Exportar PDF', 'btn-outline', () => runExport(deck, 'pdf', result)),
+        button('PowerPoint', 'btn-outline', () => runExport(deck, 'pptx', result)),
+        button(deck.shareToken ? 'Enlace público' : 'Compartir', 'btn-outline', () =>
+          toggleShare(deck, shareBox)
+        ),
+        button('Borrar', 'btn-outline', () => removeDeck(deck))
+      );
+
+      article.append(title, meta, description, actions, result, shareBox);
+      wrap.append(article);
+    }
+  }
+
+  /** Botón con clase y handler. */
+  function button(label: string, className: string, onClick: () => void): HTMLButtonElement {
+    const el = document.createElement('button');
+    el.type = 'button';
+    el.className = className;
+    el.textContent = label;
+    el.addEventListener('click', onClick);
+    return el;
+  }
+
+  // ── Compartir ──────────────────────────────────────────────
+  async function toggleShare(deck: DeckSummary, box: HTMLElement): Promise<void> {
+    if (!box.hidden) {
+      box.hidden = true;
+      return;
+    }
+    box.hidden = false;
+    box.innerHTML = '<p class="status">Preparando el enlace…</p>';
+
+    try {
+      const { shareToken, sharePath } = await setShare(deck.id, true);
+      const url = `${location.origin}${sharePath}`;
+
+      const hint = document.createElement('p');
+      hint.className = 'fc-hint';
+      hint.textContent =
+        'Cualquiera con este enlace puede ver, estudiar y exportar el mazo. Puedes revocarlo cuando quieras.';
+
+      const row = document.createElement('div');
+      row.className = 'fc-share-row';
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.readOnly = true;
+      input.value = url;
+      const copy = button('Copiar', 'btn-outline', async () => {
+        try {
+          await navigator.clipboard.writeText(url);
+          copy.textContent = '¡Copiado!';
+          setTimeout(() => (copy.textContent = 'Copiar'), 2000);
+        } catch {
+          input.select();
+        }
+      });
+      const open = document.createElement('a');
+      open.className = 'btn-outline';
+      open.href = url;
+      open.target = '_blank';
+      open.rel = 'noopener';
+      open.textContent = 'Abrir';
+      row.append(input, copy, open);
+
+      const message = document.createElement('p');
+      message.className = 'status';
+
+      const revoke = button('Revocar enlace', 'btn-outline', async () => {
+        revoke.disabled = true;
+        try {
+          await setShare(deck.id, false);
+          deck.shareToken = null;
+          box.hidden = true;
+          renderDecks();
+          setStatus($('fc-list-status'), 'Enlace revocado: ya no es accesible.', false);
+        } catch (err) {
+          revoke.disabled = false;
+          setStatus(message, errMsg(err), true);
+        }
+      });
+
+      box.innerHTML = '';
+      box.append(hint, row, message, revoke);
+      deck.shareToken = shareToken || deck.shareToken;
+    } catch (err) {
+      const message = document.createElement('p');
+      message.className = 'status';
+      setStatus(message, errMsg(err), true);
+      box.innerHTML = '';
+      box.append(message);
+    }
+  }
+
+  // ── Exportar ───────────────────────────────────────────────
+  async function runExport(
+    deck: DeckSummary,
+    format: 'pdf' | 'pptx',
+    statusEl: HTMLElement
+  ): Promise<void> {
+    setStatus(statusEl, `Generando ${format === 'pdf' ? 'el PDF' : 'el PowerPoint'}…`);
+    try {
+      const result = await exportDeck(deck.id, format);
+      const link = document.createElement('a');
+      link.className = 'btn-download';
+      link.href = exportDownloadUrl(result.id);
+      link.textContent = `⬇️ Descargar ${result.name}`;
+
+      statusEl.textContent = 'Listo: se ha guardado también en tu historial.';
+      statusEl.classList.remove('error');
+      statusEl.append(' ', link);
+    } catch (err) {
+      setStatus(statusEl, errMsg(err), true);
+    }
+  }
+
+  async function removeDeck(deck: DeckSummary): Promise<void> {
+    if (!confirm(`¿Borrar el mazo «${deck.title}»? Esta acción no se puede deshacer.`)) return;
+    try {
+      await deleteDeck(deck.id);
+      await loadDecks();
+    } catch (err) {
+      setStatus($('fc-list-status'), errMsg(err), true);
+    }
+  }
+
+  // ── Editor ─────────────────────────────────────────────────
+  async function startEditor(id: number | null): Promise<void> {
+    setStatus($('fc-editor-status'), '');
+    pickerTarget = -1;
+
+    if (id === null) {
+      editing = { id: null, title: '', description: '', cards: [emptyCard()] };
+      $('fc-editor-title').textContent = 'Nuevo mazo';
+    } else {
+      setStatus($('fc-editor-status'), 'Cargando el mazo…');
+      try {
+        const deck = await fetchDeck(id);
+        editing = {
+          id: deck.id,
+          title: deck.title,
+          description: deck.description,
+          cards: deck.cards.map((card) => ({
+            term: card.term,
+            definition: card.definition,
+            image: card.image
+          }))
+        };
+        if (editing.cards.length === 0) editing.cards.push(emptyCard());
+        $('fc-editor-title').textContent = 'Editar mazo';
+      } catch (err) {
+        setStatus($('fc-editor-status'), errMsg(err), true);
+        return;
+      }
+      setStatus($('fc-editor-status'), '');
+    }
+
+    $<HTMLInputElement>('fc-title').value = editing.title;
+    $<HTMLInputElement>('fc-description').value = editing.description;
+    renderCardsEditor();
+    showView('editor');
+  }
+
+  const emptyCard = (): FlashcardInput => ({ term: '', definition: '', image: null });
+
+  function addCard(): void {
+    editing.cards.push(emptyCard());
+  }
+
+  /** Tarjeta del editor: miniatura + término + definición + herramientas. */
+  function renderCardsEditor(): void {
+    const wrap = $('fc-cards-editor');
+    wrap.innerHTML = '';
+
+    editing.cards.forEach((card, index) => {
+      const row = document.createElement('div');
+      row.className = 'fc-editor-card';
+
+      const head = document.createElement('div');
+      head.className = 'fc-editor-card-head';
+      const number = document.createElement('span');
+      number.className = 'fc-card-number';
+      number.textContent = `Tarjeta ${index + 1}`;
+
+      const tools = document.createElement('div');
+      tools.className = 'fc-card-tools';
+      tools.append(
+        button('↑', 'chip-btn', () => moveCard(index, -1)),
+        button('↓', 'chip-btn', () => moveCard(index, 1)),
+        button('Duplicar', 'chip-btn', () => {
+          editing.cards.splice(index + 1, 0, { ...editing.cards[index] });
+          renderCardsEditor();
+        }),
+        button('Borrar', 'chip-btn', () => {
+          editing.cards.splice(index, 1);
+          if (editing.cards.length === 0) addCard();
+          renderCardsEditor();
+        })
+      );
+      head.append(number, tools);
+
+      const body = document.createElement('div');
+      body.className = 'fc-editor-card-body';
+
+      // Miniatura / selector de ilustración
+      const thumb = document.createElement('button');
+      thumb.type = 'button';
+      thumb.className = 'fc-thumb';
+      thumb.title = 'Elegir ilustración de la biblioteca';
+      if (card.image) {
+        const image = document.createElement('img');
+        image.src = `/api/flashcards/library/${card.image}.svg`;
+        image.alt = '';
+        thumb.append(image);
+      } else {
+        thumb.classList.add('fc-thumb-empty');
+        thumb.textContent = '＋ Imagen';
+      }
+      thumb.addEventListener('click', () => openPicker(index));
+      body.append(thumb);
+
+      const termField = document.createElement('label');
+      termField.className = 'field';
+      const termLabel = document.createElement('span');
+      termLabel.textContent = 'Término';
+      const termInput = document.createElement('input');
+      termInput.type = 'text';
+      termInput.maxLength = MAX_TERM;
+      termInput.placeholder = 'Ej. dog';
+      termInput.value = card.term;
+      termInput.addEventListener('input', () => {
+        editing.cards[index].term = termInput.value;
+      });
+      termField.append(termLabel, termInput);
+
+      const defField = document.createElement('label');
+      defField.className = 'field';
+      const defLabel = document.createElement('span');
+      defLabel.textContent = 'Definición';
+      const defInput = document.createElement('textarea');
+      defInput.rows = 2;
+      defInput.maxLength = MAX_DEFINITION;
+      defInput.placeholder = 'Ej. Perro';
+      defInput.value = card.definition;
+      defInput.addEventListener('input', () => {
+        editing.cards[index].definition = defInput.value;
+      });
+      defField.append(defLabel, defInput);
+
+      body.append(termField, defField);
+      row.append(head, body);
+      wrap.append(row);
+    });
+  }
+
+  function moveCard(index: number, delta: number): void {
+    const target = index + delta;
+    if (target < 0 || target >= editing.cards.length) return;
+    const [card] = editing.cards.splice(index, 1);
+    editing.cards.splice(target, 0, card);
+    renderCardsEditor();
+  }
+
+  async function saveDeck(): Promise<void> {
+    const status = $('fc-editor-status');
+    const title = $<HTMLInputElement>('fc-title').value.trim();
+    const description = $<HTMLInputElement>('fc-description').value.trim();
+    const cards = editing.cards
+      .map((card) => ({
+        term: card.term.trim(),
+        definition: card.definition.trim(),
+        image: card.image
+      }))
+      .filter((card) => card.term || card.definition);
+
+    if (!title) {
+      setStatus(status, 'Ponle un título al mazo.', true);
+      return;
+    }
+    if (cards.length === 0) {
+      setStatus(status, 'Añade al menos una tarjeta.', true);
+      return;
+    }
+
+    const incomplete = cards.findIndex((card) => !card.term || !card.definition);
+    if (incomplete >= 0) {
+      setStatus(status, `La tarjeta ${incomplete + 1} necesita término y definición.`, true);
+      return;
+    }
+
+    const saveButton = $<HTMLButtonElement>('btn-save-deck');
+    saveButton.disabled = true;
+    setStatus(status, 'Guardando…');
+
+    try {
+      const payload = { title, description, cards };
+      if (editing.id === null) {
+        await createDeck(payload);
+      } else {
+        await updateDeck(editing.id, payload);
+      }
+      setStatus(status, '');
+      showView('list');
+    } catch (err) {
+      setStatus(status, errMsg(err), true);
+    } finally {
+      saveButton.disabled = false;
+    }
+  }
+
+  // ── Biblioteca de ilustraciones ────────────────────────────
+  function openPicker(index: number): void {
+    pickerTarget = index;
+    pickerQuery = '';
+    $<HTMLInputElement>('fc-picker-search').value = '';
+    $('fc-picker').hidden = false;
+    renderPickerTabs();
+    renderPickerGrid();
+    $('fc-picker').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function closePicker(): void {
+    $('fc-picker').hidden = true;
+    pickerTarget = -1;
+  }
+
+  function setCardImage(imageId: string | null): void {
+    if (pickerTarget < 0) return;
+    editing.cards[pickerTarget].image = imageId;
+    closePicker();
+    renderCardsEditor();
+  }
+
+  function renderPickerTabs(): void {
+    const wrap = $('fc-picker-tabs');
+    wrap.innerHTML = '';
+
+    const tabs: Array<{ id: string; label: string }> = [
+      { id: 'todas', label: 'Todas' },
+      ...library.map((category) => ({ id: category.id, label: category.label }))
+    ];
+
+    for (const tab of tabs) {
+      const el = button(tab.label, pickerCategory === tab.id ? 'fc-tab active' : 'fc-tab', () => {
+        pickerCategory = tab.id;
+        renderPickerTabs();
+        renderPickerGrid();
+      });
+      wrap.append(el);
+    }
+  }
+
+  function renderPickerGrid(): void {
+    const wrap = $('fc-picker-grid');
+    wrap.innerHTML = '';
+
+    const items: LibraryItem[] = library
+      .filter((category) => pickerCategory === 'todas' || category.id === pickerCategory)
+      .flatMap((category) => category.items)
+      .filter((item) => !pickerQuery || normalize(item.label).includes(pickerQuery));
+
+    if (items.length === 0) {
+      const empty = document.createElement('p');
+      empty.className = 'status';
+      empty.textContent = 'No hay ilustraciones que coincidan con la búsqueda.';
+      wrap.append(empty);
+      return;
+    }
+
+    for (const item of items) {
+      const el = document.createElement('button');
+      el.type = 'button';
+      el.className = 'fc-grid-item';
+      el.title = item.label;
+
+      const image = document.createElement('img');
+      image.src = item.url;
+      image.alt = item.label;
+      image.loading = 'lazy';
+
+      const label = document.createElement('span');
+      label.textContent = item.label;
+
+      el.append(image, label);
+      el.addEventListener('click', () => setCardImage(item.id));
+      wrap.append(el);
+    }
+  }
+
+  // ── Modo estudiar ──────────────────────────────────────────
+  async function startStudy(deckId: number): Promise<void> {
+    const status = $('fc-list-status');
+    setStatus(status, 'Cargando el mazo…');
+    try {
+      const deck = await fetchDeck(deckId);
+      if (study) {
+        study.destroy();
+        study = null;
+      }
+      $('fc-study-title').textContent = deck.title;
+      const container = $('fc-study-body');
+      study = createStudy(
+        container,
+        deck.cards.map((card) => ({
+          term: card.term,
+          definition: card.definition,
+          imageUrl: card.image ? `/api/flashcards/library/${card.image}.svg` : null
+        }))
+      );
+      setStatus(status, '');
+      showView('study');
+    } catch (err) {
+      setStatus(status, errMsg(err), true);
+    }
+  }
+
+  void main();
+</script>

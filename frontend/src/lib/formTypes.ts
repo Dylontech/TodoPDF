@@ -6,6 +6,12 @@
 export interface FieldOption {
   value: string;
   label: string;
+  /**
+   * Extensiones de ENTRADA para las que esta opción es válida.
+   * Solo lo usan los selectores de formato dinámicos (p. ej. convertir
+   * documento): los formatos de salida dependen del tipo del archivo subido.
+   */
+  inputs?: string[];
 }
 
 export interface Field {

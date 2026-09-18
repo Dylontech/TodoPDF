@@ -141,6 +141,43 @@ const config = {
     timeoutMs: Number(process.env.TODOPDF_INPAINT_TIMEOUT_MS || 180_000),
     // Procesamientos simultáneos (protege la RAM/CPU del servidor)
     maxConcurrency: Number(process.env.TODOPDF_INPAINT_CONCURRENCY || 1)
+  },
+
+  // ── Creador de flashcards (solo usuarios autenticados) ─────
+  flashcards: {
+    // Biblioteca de ilustraciones SVG propias (una sola copia, servida por API)
+    libraryDir:
+      process.env.TODOPDF_FLASHCARDS_LIBRARY_DIR ||
+      path.join(__dirname, '../../assets/flashcards'),
+    // Fuente TTF embebida en el PDF (vacío = se busca en fontCandidates)
+    fontPath: process.env.TODOPDF_FLASHCARDS_FONT || '',
+    fontBoldPath: process.env.TODOPDF_FLASHCARDS_FONT_BOLD || '',
+    // Candidatos por defecto: DejaVu cubre Latin/Greek/Cyrillic + flechas y
+    // símbolos (→ ✓ ★), mejor que Noto Sans. Se comprueban en orden.
+    fontCandidates: [
+      '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', // Debian (Docker)
+      '/usr/share/fonts/TTF/DejaVuSans.ttf', // Arch
+      '/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf', // Debian (fonts-noto)
+      '/usr/share/fonts/noto/NotoSans-Regular.ttf' // Arch
+    ],
+    fontBoldCandidates: [
+      '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+      '/usr/share/fonts/TTF/DejaVuSans-Bold.ttf',
+      '/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf',
+      '/usr/share/fonts/noto/NotoSans-Bold.ttf'
+    ],
+    // Límites de un mazo (el editor envía JSON y express.json está a 1 MB)
+    maxCards: Number(process.env.TODOPDF_FLASHCARDS_MAX_CARDS || 200),
+    maxTitleLen: 255,
+    maxDescriptionLen: 1000,
+    maxTermLen: 200,
+    maxDefinitionLen: 1000,
+    // Altura a la que se rasterizan las ilustraciones SVG para el PDF/PPTX
+    imageHeight: Number(process.env.TODOPDF_FLASHCARDS_IMAGE_HEIGHT || 600),
+    // Tiempo máximo de una exportación (el fallback con LibreOffice es lento)
+    timeoutMs: Number(process.env.TODOPDF_FLASHCARDS_TIMEOUT_MS || 120_000),
+    // Exportaciones simultáneas (LibreOffice es pesado: una a la vez)
+    maxConcurrency: Number(process.env.TODOPDF_FLASHCARDS_CONCURRENCY || 1)
   }
 };
 

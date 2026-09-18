@@ -8,6 +8,8 @@
 #   ghostscript/poppler-utils/imagemagick → PDF ↔ imágenes (pipes en RAM)
 #   libreoffice-writer/calc/impress        → PDF ↔ Office (DOCX/XLSX/PPTX)
 #   fonts-noto*                            → tipografías para un PDF legible
+#   fonts-dejavu-core                      → fuente embebida del PDF de flashcards
+#                                            (cubre acentos, flechas y símbolos)
 #   ffmpeg                               → descargador de vídeos (yt-dlp se instala por pip en el venv)
 #   python3 + venv                         → rembg (quitar fondo con IA)
 #   libgl1/libglib2.0-0/libgomp1           → runtime de opencv-python-headless
@@ -21,7 +23,7 @@ RUN apt-get -o Acquire::Check-Valid-Until=false -o Acquire::Check-Date=false upd
     && apt-get install -y --no-install-recommends \
         ghostscript poppler-utils imagemagick \
         libreoffice-writer libreoffice-calc libreoffice-impress \
-        fonts-noto fonts-noto-cjk \
+        fonts-noto fonts-noto-cjk fonts-dejavu-core \
         ffmpeg \
         python3 python3-pip python3-venv \
         libgl1 libglib2.0-0 libgomp1 \

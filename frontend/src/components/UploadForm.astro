@@ -5,7 +5,9 @@
 //   accept          → atributo accept del input (ej. application/pdf)
 //   multiple        → admite varios archivos
 //   formatSelector  → muestra selector de formato de salida
-//   formats         → [{ value, label }] para el selector
+//   formats         → [{ value, label, inputs? }] para el selector
+//   dynamicFormats  → el selector de formato se reconstruye según la extensión
+//                     del archivo elegido (usando `inputs` de cada formato)
 //   fields          → [{ name, label, type, options?, placeholder?, default?, min?, step?, dependsOn? }]
 //   secondaryFiles  → [{ field, label, accept }] (inputs de archivo extra)
 //   submitLabel     → texto del botón
@@ -18,6 +20,7 @@ interface Props {
   multiple?: boolean;
   formatSelector?: boolean;
   formats?: FieldOption[];
+  dynamicFormats?: boolean;
   fields?: Field[];
   secondaryFiles?: SecondaryFile[];
   submitLabel?: string;
@@ -29,6 +32,8 @@ const {
   multiple = false,
   formatSelector = false,
   formats = [],
+  // Selector de salida dependiente del archivo elegido (ver script)
+  dynamicFormats = false,
   // Campos adicionales (texto/número/select/radio) que se envían al endpoint.
   fields = [],
   // Inputs de archivo adicionales con nombre propio (p. ej. Insertar páginas: campo 'insert').
@@ -50,6 +55,7 @@ const {
       <select id="format">
         {formats.map((f) => <option value={f.value}>{f.label}</option>)}
       </select>
+      {dynamicFormats && <small id="format-hint" class="format-hint"></small>}
     </label>
   )}
 
@@ -115,7 +121,7 @@ const {
 
 <div id="result" class="result" hidden></div>
 
-<script define:vars={{ endpoint, formatSelector, fields, secondaryFiles }}>
+<script define:vars={{ endpoint, formatSelector, dynamicFormats, formats, fields, secondaryFiles }}>
   const form = document.getElementById('upload-form');
   const input = document.getElementById('file-input');
   const dropzone = document.getElementById('dropzone');
@@ -123,6 +129,8 @@ const {
   const statusEl = document.getElementById('status');
   const submitBtn = document.getElementById('submit-btn');
   const result = document.getElementById('result');
+  const formatSelect = document.getElementById('format');
+  const formatHint = document.getElementById('format-hint');
 
   // ── Selección de archivos (clic + arrastrar y soltar) ─────
   dropzone.addEventListener('click', () => input.click());
@@ -150,7 +158,55 @@ const {
     info.textContent = files.length
       ? files.map((f) => `${f.name} (${(f.size / 1048576).toFixed(2)} MB)`).join(', ')
       : '';
+    syncFormatOptions();
   }
+
+  // ── Selector de formato de salida dinámico ─────────────────
+  // Cada opción declara para qué extensiones de entrada es válida (`inputs`).
+  // Al elegir archivo se reconstruye la lista y se evita ofrecer el MISMO
+  // formato que el del archivo (no tendría sentido convertirlo a sí mismo).
+  function fileExt(name) {
+    const m = /\.([a-z0-9]+)$/i.exec(String(name || ''));
+    return m ? m[1].toLowerCase() : '';
+  }
+
+  function syncFormatOptions() {
+    if (!dynamicFormats || !formatSelect) return;
+    const file = input.files && input.files[0];
+    const ext = file ? fileExt(file.name) : '';
+    const allowed = (formats || []).filter((f) => {
+      if (!f.inputs || f.inputs.length === 0) return true;
+      if (!ext || !f.inputs.includes(ext)) return false;
+      return f.value !== ext;
+    });
+
+    formatSelect.innerHTML = '';
+    if (allowed.length === 0) {
+      // Sin opciones: se explica el motivo y se bloquea el envío
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = ext ? `Sin formatos de salida para .${ext}` : 'Elige primero un archivo';
+      formatSelect.appendChild(opt);
+      formatSelect.disabled = true;
+    } else {
+      allowed.forEach((f) => {
+        const opt = document.createElement('option');
+        opt.value = f.value;
+        opt.textContent = f.label;
+        formatSelect.appendChild(opt);
+      });
+      formatSelect.disabled = false;
+    }
+
+    submitBtn.disabled = allowed.length === 0;
+    if (formatHint) {
+      formatHint.textContent = ext
+        ? `Tipo detectado: ${ext.toUpperCase()} · ${allowed.length} formato(s) de salida disponible(s).`
+        : 'Las opciones de salida dependen del tipo de archivo.';
+    }
+  }
+
+  if (dynamicFormats) syncFormatOptions();
 
   // ── Envío a la API ─────────────────────────────────────────
   form.addEventListener('submit', async (e) => {
@@ -181,7 +237,6 @@ const {
       });
 
       if (formatSelector) fd.append('format', document.getElementById('format').value);
-
       const res = await fetch(endpoint, { method: 'POST', body: fd, credentials: 'include' });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));

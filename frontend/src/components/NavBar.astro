@@ -59,13 +59,23 @@
       const res = await fetch('/api/auth/me', { credentials: 'include' });
       const data = await res.json();
       if (res.ok && data.user) {
+        // Con sesión: solo la herramienta destacada queda a la vista; el resto
+        // (incluido cerrar sesión) se agrupa en «Mi cuenta» para que la barra
+        // no se sature ni colapse antes de tiempo en ventanas estrechas.
         el.innerHTML = `
-          <a href="/descargar-videos">Descargar vídeos</a>
-          <a href="/quitar-fondo">Quitar fondo</a>
-          <a href="/imagen-a-vectorial">Imagen → Vectorial</a>
-          <a href="/quitar-objetos">Quitar objetos</a>
-          <a href="/historial">Historial</a>
-          <button id="btn-logout" class="btn-outline">Cerrar sesión</button>`;
+          <a href="/flashcards" class="nav-cta">Flashcards</a>
+          <details class="nav-dropdown align-right">
+            <summary>Mi cuenta <span class="caret">▾</span></summary>
+            <div class="dropdown-menu">
+              <a href="/historial">Historial</a>
+              <a href="/convertir-documento">Convertir documento</a>
+              <a href="/descargar-videos">Descargar vídeos</a>
+              <a href="/quitar-fondo">Quitar fondo</a>
+              <a href="/imagen-a-vectorial">Imagen → Vectorial</a>
+              <a href="/quitar-objetos">Quitar objetos</a>
+              <button type="button" id="btn-logout" class="dropdown-logout">Cerrar sesión</button>
+            </div>
+          </details>`;
         document.getElementById('btn-logout')?.addEventListener('click', async () => {
           await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
           location.href = '/';

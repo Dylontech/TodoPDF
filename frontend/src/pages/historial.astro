@@ -13,13 +13,27 @@ import Layout from '../layouts/Layout.astro';
 </Layout>
 
 <script>
-  const LABELS = {
+  const LABELS: Record<string, string> = {
     'pdf-to-images': 'PDF → Imágenes',
     'images-to-pdf': 'Imágenes → PDF',
     'remove-bg': 'Quitar fondo',
     'image-to-vector': 'Imagen → Vectorial (SVG)',
-    'image-inpaint': 'Quitar objetos'
+    'image-inpaint': 'Quitar objetos',
+    'flashcards-to-pdf': 'Flashcards → PDF',
+    'flashcards-to-pptx': 'Flashcards → PowerPoint'
   };
+
+  /**
+   * Etiqueta legible de una conversión. Los tipos con formato
+   * '<origen>-to-<destino>' (PDF → Office y Convertir documento) se generan
+   * dinámicamente para no tener que mantener una entrada por combinación.
+   */
+  function typeLabel(type: string): string {
+    if (LABELS[type]) return LABELS[type];
+    if (type.startsWith('pdf-to-')) return `PDF → ${type.slice(7).toUpperCase()}`;
+    if (type.startsWith('office-to-')) return `Documento → ${type.slice(10).toUpperCase()}`;
+    return escapeHtml(type);
+  }
 
   async function main() {
     const box = document.getElementById('history');
@@ -60,7 +74,7 @@ import Layout from '../layouts/Layout.astro';
             .map(
               (h) => `
                 <tr>
-                  <td>${LABELS[h.type] || escapeHtml(h.type)}</td>
+                  <td>${typeLabel(h.type)}</td>
                   <td class="truncate" title="${escapeHtml(h.input_filename)}">${escapeHtml(h.input_filename)}</td>
                   <td>${formatSize(h.size)}</td>
                   <td class="col-date">${new Date(h.created_at).toLocaleString('es')}</td>

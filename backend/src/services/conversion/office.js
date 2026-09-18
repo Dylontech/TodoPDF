@@ -11,10 +11,21 @@ const { detectFileType } = require('../../utils/files');
 const { httpError } = require('../../utils/errors');
 const { runCommand } = require('../../utils/exec');
 const { pdfToImages } = require('./pdfToImages');
+const {
+  OFFICE_FORMATS,
+  OUTPUT_FORMATS,
+  INPUT_LABEL,
+  mimeForExt,
+  detectOfficeKind,
+  isSupportedPair,
+  outputsFor,
+  convertToArg,
+  familyLabel
+} = require('./officeFormats');
 
 /**
  * ─────────────────────────────────────────────────────────────
- * PDF ↔ Office con LibreOffice headless (soffice).
+ * PDF ↔ Office y Office ↔ Office con LibreOffice headless (soffice).
  *
  * LibreOffice NO puede procesar en puro RAM: necesita un directorio
  * de trabajo y un perfil de usuario. Por eso se crea un directorio
@@ -44,9 +55,12 @@ const PDF_TARGET_FORMATS = {
   ppt: { mode: 'slides-ppt', mime: 'application/vnd.ms-powerpoint' }
 };
 
-/** MIME de un formato de Office de salida (para el Content-Type de respuesta). */
+/**
+ * MIME de un formato de Office de salida (para el Content-Type de respuesta).
+ * La tabla de MIME vive en officeFormats.js (fuente única).
+ */
 function mimeForOffice(ext) {
-  return (PDF_TARGET_FORMATS[ext] || {}).mime || 'application/octet-stream';
+  return mimeForExt(ext);
 }
 
 /**
@@ -83,41 +97,68 @@ async function pdfToOffice(pdfBuffer, targetExt) {
 }
 
 /**
- * Convierte un documento de Office → PDF.
- * El formato de entrada se detecta por magic bytes (nunca por extensión).
+ * Convierte un documento de Office a OTRO formato de Office (o a PDF).
  *
- * @param {Buffer} officeBuffer Contenido del documento Office en memoria.
- * @returns {Promise<Buffer>} El PDF resultante.
+ * El formato de entrada se detecta por magic bytes (nunca por extensión): los
+ * .doc/.xls/.ppt comparten contenedor CFB y se distinguen mirando dentro
+ * (ver detectOfficeKind). La extensión del archivo temporal es la que hace que
+ * LibreOffice elija el filtro de importación correcto.
+ *
+ * Solo se permiten conversiones dentro de la MISMA familia (writer → writer,
+ * calc → calc, impress → impress) y a PDF desde cualquier familia.
+ *
+ * @param {Buffer} officeBuffer Contenido del documento en memoria.
+ * @param {string} targetExt Formato de salida (docx, odt, doc, rtf, txt, xlsx,
+ *   ods, xls, csv, pptx, odp, ppt, pdf).
+ * @param {string} [declaredName] Nombre original (último recurso de detección).
+ * @returns {Promise<Buffer>} El documento convertido.
  */
-async function officeToPdf(officeBuffer) {
-  const type = await detectFileType(officeBuffer);
-  const ext = extensionForMime(type && type.mime);
-  if (!ext) {
-    throw httpError(400, 'El archivo debe ser un documento de Office (DOCX, DOC, XLSX, PPTX u ODT).');
+async function officeToOffice(officeBuffer, targetExt, declaredName = '') {
+  const target = String(targetExt || '').toLowerCase().replace(/^\./, '');
+  const fmt = OFFICE_FORMATS[target];
+  if (!fmt) {
+    throw httpError(400, `Formato de salida no soportado: "${targetExt}". Permitidos: ${OUTPUT_FORMATS.join(', ')}.`);
+  }
+
+  const source = await detectOfficeKind(officeBuffer, declaredName);
+  if (!source) {
+    throw httpError(400, `El archivo debe ser un documento de Office (${INPUT_LABEL}).`);
+  }
+  if (source.ext === 'pdf') {
+    throw httpError(400, 'El archivo ya es un PDF. Para PDF → Office usa la herramienta «PDF a Office».');
+  }
+  if (source.ext === target) {
+    throw httpError(400, `El archivo ya está en formato ${target.toUpperCase()}: elige otro formato de salida.`);
+  }
+  if (!isSupportedPair(source.ext, target)) {
+    throw httpError(
+      400,
+      `No se puede convertir ${source.ext.toUpperCase()} a ${target.toUpperCase()}: son familias distintas. ` +
+        `Para un ${familyLabel(source.family)} los formatos válidos son ${outputsFor(source.ext)
+          .join(', ')
+          .toUpperCase()}.`
+    );
   }
 
   return runSoffice({
     input: officeBuffer,
-    inputName: `input.${ext}`,
+    inputName: `input.${source.ext}`,
     infilter: null,
-    convertTo: 'pdf:writer_pdf_Export',
-    outputName: 'input.pdf'
+    convertTo: convertToArg(target, source.family),
+    outputName: `input.${target}`
   });
 }
 
-/** MIME (detectado por file-type) → extensión de documento Office admitida. */
-function extensionForMime(mime) {
-  const map = {
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
-    // Los .doc son contenedores CFB/OLE2; file-type los reporta así (según build)
-    'application/msword': 'doc',
-    'application/x-cfb': 'doc',
-    'application/x-ole-storage': 'doc',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
-    'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
-    'application/vnd.oasis.opendocument.text': 'odt'
-  };
-  return map[mime] || null;
+/**
+ * Convierte un documento de Office → PDF, usando el filtro de exportación
+ * de la familia de origen (Writer/Calc/Impress).
+ *
+ * @param {Buffer} officeBuffer Contenido del documento Office en memoria.
+ * @param {string} [declaredName] Nombre original (último recurso de detección).
+ * @returns {Promise<Buffer>} El PDF resultante.
+ */
+async function officeToPdf(officeBuffer, declaredName = '') {
+  return officeToOffice(officeBuffer, 'pdf', declaredName);
 }
 
 /**
@@ -153,8 +194,11 @@ async function runSoffice({ input, inputName, infilter, convertTo, outputName })
     args.push(inputPath);
 
     // stdin no se usa: LibreOffice lee el archivo del directorio de trabajo.
+    // LC_ALL=C.UTF-8: en contenedores con locale C (POSIX) LibreOffice usa un
+    // charset ASCII/Latin-1 para txt/csv → acentos y eñes saldrían corruptos.
     await runCommand(config.office.sofficePath, args, null, {
-      timeoutMs: config.office.timeoutMs
+      timeoutMs: config.office.timeoutMs,
+      env: { ...process.env, LC_ALL: 'C.UTF-8', LANG: 'C.UTF-8' }
     });
 
     const out = await fs.readFile(outputPath).catch(() => null);
@@ -230,4 +274,15 @@ async function pdfToPpt(pdfBuffer) {
   });
 }
 
-module.exports = { pdfToOffice, officeToPdf, mimeForOffice, PDF_TARGET_FORMATS };
+module.exports = {
+  pdfToOffice,
+  officeToPdf,
+  officeToOffice,
+  mimeForOffice,
+  mimeForExt,
+  OFFICE_FORMATS,
+  OUTPUT_FORMATS,
+  PDF_TARGET_FORMATS,
+  // Reutilizado por la exportación de flashcards (respaldo PPTX → PDF)
+  runSoffice
+};

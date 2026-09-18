@@ -14,6 +14,7 @@ const storage = require('../services/storageService');
 const { httpError } = require('../utils/errors');
 const { sanitizeFilename } = require('../utils/files');
 const { sendSingleFile, sendZip } = require('../utils/response');
+const { persistSingle } = require('./helpers');
 
 /**
  * Controlador de conversiones.
@@ -38,6 +39,9 @@ const PDF_IMAGE_FORMATS = ['jpeg', 'jpg', 'png', 'webp', 'tiff', 'bmp', 'gif'];
 
 /** Formatos de salida admitidos en PDF → Office. */
 const PDF_OFFICE_FORMATS = Object.keys(officeService.PDF_TARGET_FORMATS);
+
+/** Formatos de salida admitidos en Office → Office. */
+const OFFICE_OUTPUT_FORMATS = officeService.OUTPUT_FORMATS;
 
 // ── Helpers privados ─────────────────────────────────────────
 
@@ -197,9 +201,10 @@ async function convertOfficeToPdf(req, res, next) {
 
     // 1) Documento Office en memoria (invitado) o leído del temporal (autenticado)
     const officeBuffer = await getInputBuffer(req.files);
+    const inputName = sanitizeFilename(req.files[0].originalname);
 
     // 2) Conversión con LibreOffice (temp aislado; concurrencia limitada)
-    const out = await officeLimit(() => officeService.officeToPdf(officeBuffer));
+    const out = await officeLimit(() => officeService.officeToPdf(officeBuffer, inputName));
 
     // 3) FLUJO AUTENTICADO: persistir en el volumen + historial
     if (userId) {
@@ -208,7 +213,7 @@ async function convertOfficeToPdf(req, res, next) {
       const [id] = await db('conversions').insert({
         user_id: userId,
         type: 'office-to-pdf',
-        input_filename: sanitizeFilename(req.files[0].originalname),
+        input_filename: inputName,
         output_path: outPath,
         size: out.length
       });
@@ -216,10 +221,43 @@ async function convertOfficeToPdf(req, res, next) {
     }
 
     // 4) FLUJO INVITADO: PDF en memoria
-    const base = sanitizeFilename(req.files[0].originalname).replace(/\.[^.]+$/, '');
+    const base = inputName.replace(/\.[^.]+$/, '');
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(base)}.pdf"`);
     res.send(out);
+  } catch (err) {
+    next(err);
+  } finally {
+    await cleanupUploads(req);
+  }
+}
+
+/**
+ * POST /api/convert/office-to-office — convierte un documento de Office a otro
+ * formato de su misma familia (ODT → DOCX, XLS → XLSX, PPT → PPTX, y también
+ * DOCX → ODT, XLSX → ODS…). Además permite exportar a PDF.
+ *
+ * Ruta EXCLUSIVA para usuarios con sesión (requireAuth en las rutas): el
+ * resultado se guarda en el volumen y queda en el historial.
+ */
+async function convertOfficeToOffice(req, res, next) {
+  try {
+    const userId = req.session.userId; // garantizado por requireAuth
+    if (!req.body.format) throw httpError(400, 'Indica el formato de salida.');
+    const format = normalizeFormat(req.body.format, OFFICE_OUTPUT_FORMATS);
+    const inputName = sanitizeFilename(req.files && req.files[0] && req.files[0].originalname);
+
+    // 1) Documento en memoria (multer lo dejó en el temporal si hay sesión)
+    const inputBuffer = await getInputBuffer(req.files);
+
+    // 2) Conversión con LibreOffice (temp aislado; concurrencia limitada)
+    const out = await officeLimit(() => officeService.officeToOffice(inputBuffer, format, inputName));
+
+    // 3) Persistir en el volumen + historial
+    const name = `convertido-${Date.now()}.${format}`;
+    const id = await persistSingle(userId, out, `office-to-${format}`, inputName, name);
+
+    res.status(201).json({ id, name, format });
   } catch (err) {
     next(err);
   } finally {
@@ -252,15 +290,10 @@ async function download(req, res, next) {
     }
 
     // Archivo único: el Content-Type depende de la extensión del resultado
-    // (PDF, PNG/WebP/JPG para herramientas de imagen o SVG para vectorizar).
-    const ext = path.extname(row.output_path).toLowerCase();
-    const mime =
-      ext === '.png' ? 'image/png'
-      : ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg'
-      : ext === '.webp' ? 'image/webp'
-      : ext === '.svg' ? 'image/svg+xml'
-      : 'application/pdf';
-    res.setHeader('Content-Type', mime);
+    // (PDF, documentos de Office, PNG/WebP/JPG de las herramientas de imagen
+    // o SVG al vectorizar). La tabla de MIME vive en officeFormats.js.
+    const ext = path.extname(row.output_path).toLowerCase().replace('.', '');
+    res.setHeader('Content-Type', officeService.mimeForExt(ext));
     res.setHeader('Content-Disposition', `attachment; filename="${path.basename(row.output_path)}"`);
     res.sendFile(row.output_path);
   } catch (err) {
@@ -273,5 +306,6 @@ module.exports = {
   convertImagesToPdf,
   convertPdfToOffice,
   convertOfficeToPdf,
+  convertOfficeToOffice,
   download
 };

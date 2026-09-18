@@ -15,14 +15,19 @@ const { httpError } = require('./errors');
  * @param {string[]} args Argumentos.
  * @param {Buffer} [input] Buffer que se escribe en stdin (opcional:
  *                        algunos binarios leen de un archivo, no de stdin).
- * @param {object} [opts] { timeoutMs }
+ * @param {object} [opts] { timeoutMs, env }
  * @returns {Promise<{ stdout: Buffer, stderr: string }>}
  */
 function runCommand(cmd, args, input, opts = {}) {
   return new Promise((resolve, reject) => {
     let child;
     try {
-      child = spawn(cmd, args, { stdio: ['pipe', 'pipe', 'pipe'] });
+      // `env` permite fijar variables puntuales (p. ej. LC_ALL=C.UTF-8 para que
+      // LibreOffice exporte txt/csv en UTF-8 en contenedores con locale C).
+      child = spawn(cmd, args, {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: opts.env || process.env
+      });
     } catch (err) {
       return reject(httpError(500, `No se pudo iniciar "${cmd}".`));
     }
