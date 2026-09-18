@@ -4,3 +4,5 @@ npm-debug.log
 uploads
 .venv
 __pycache__
+# Modelos ONNX locales (~92 MB): la imagen los descarga en el build.
+.models

@@ -47,13 +47,14 @@ ENV HOME=/tmp
 RUN npm install --omit=dev --no-audit --no-fund \
     --fetch-retries=5 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=120000
 
-# Código fuente de la aplicación
-COPY . .
-
 # ── rembg (quitar fondo) + vtracer (vectorizar a SVG) en un venv ──
 # También se instala yt-dlp (versión reciente) para que el PATH resuelva
 # "yt-dlp" a una versión que mantenga el anti-403 de YouTube.
 # vtracer no necesita descargar modelos (a diferencia de rembg).
+# opencv-python-headless es OBLIGATORIO: desde rembg 2.0.78 es una dependencia
+# opcional y ya no se instala sola → sin él, "Quitar objetos de imagen"
+# (scripts/inpaint.py y auto_mask.py, que hacen `import cv2`) falla con
+# ModuleNotFoundError: No module named 'cv2'.
 ENV VIRTUAL_ENV=/opt/rembg
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 # Modelo u2net precargado en build (evita descargarlo en la 1ª petición).
@@ -67,7 +68,7 @@ ENV OMP_NUM_THREADS=2
 ENV NUMBA_CACHE_DIR=/tmp/numba-cache
 RUN python3 -m venv "$VIRTUAL_ENV" \
     && pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir "rembg[cpu]" yt-dlp vtracer \
+    && pip install --no-cache-dir "rembg[cpu]" opencv-python-headless yt-dlp vtracer \
     && mkdir -p /models && chmod 777 /models \
     && python3 -c "from rembg import new_session; new_session('u2net')" \
     # El proceso final corre como todopdf: el modelo y su dir deben ser
@@ -87,6 +88,22 @@ RUN python3 -m venv "$VIRTUAL_ENV" \
 # scripts/inpaint.py (compatibles con onnxruntime CPU).
 RUN python3 -c "import urllib.request; urllib.request.urlretrieve('https://huggingface.co/opencv/inpainting_lama/resolve/main/inpainting_lama_2025jan.onnx', '/models/big-lama.onnx')" \
     && chown todopdf:todopdf /models/big-lama.onnx
+
+# ── OCR de PDFs escaneados (tesseract) ──────────────────────
+# Se instala en una capa PROPIA a propósito: así cambiar los idiomas de OCR
+# no invalida las capas caras anteriores (apt base, npm, venv de rembg y
+# modelos ONNX), que son las que hacen lento el rebuild.
+# spa = español, eng = inglés (TODOPDF_OCR_LANGS=spa+eng por defecto).
+RUN apt-get -o Acquire::Check-Valid-Until=false -o Acquire::Check-Date=false update \
+    && apt-get install -y --no-install-recommends \
+        tesseract-ocr tesseract-ocr-spa tesseract-ocr-eng \
+    && rm -rf /var/lib/apt/lists/*
+
+# Código fuente de la aplicación.
+# VA AL FINAL a propósito: si se copiara antes, cada cambio de código
+# invalidaría las capas caras (apt, npm, venv de rembg y modelos ONNX) y
+# cada rebuild tardaría >10 min. Aquí solo se recopian los fuentes.
+COPY . .
 
 # Directorios de datos (montados como volúmenes en docker-compose).
 # Se crean y se entregan al usuario todopdf ANTES de cambiar de usuario,

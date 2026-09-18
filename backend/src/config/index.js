@@ -69,6 +69,26 @@ const config = {
     maxConcurrency: Number(process.env.TODOPDF_OFFICE_MAX_CONCURRENCY || 1)
   },
 
+  // ── OCR de PDFs escaneados (tesseract, para PDF → Office) ──
+  // Un PDF sin capa de texto se pasa por OCR para que el DOCX/ODT resultante
+  // tenga texto editable además de la imagen de la página.
+  ocr: {
+    // Binario de tesseract (lo instala el Dockerfile).
+    tesseractPath: process.env.TODOPDF_OCR_TESSERACT || 'tesseract',
+    // Idiomas de reconocimiento (se filtran contra los instalados en la imagen).
+    languages: process.env.TODOPDF_OCR_LANGS || 'spa+eng',
+    // Resolución de rasterizado para OCR: 300 dpi es el mínimo recomendado.
+    dpi: Number(process.env.TODOPDF_OCR_DPI || 300),
+    // Tiempo máximo por página (una página A4 a 300 dpi tarda segundos).
+    timeoutMs: Number(process.env.TODOPDF_OCR_TIMEOUT_MS || 120_000),
+    // Tope de páginas a las que se aplica OCR (por coste de CPU/tiempo).
+    maxPages: Number(process.env.TODOPDF_OCR_MAX_PAGES || 50),
+    // Umbral de "PDF escaneado": caracteres de texto POR PÁGINA por debajo del
+    // cual se considera que no hay texto que importar (una página digital real
+    // trae cientos o miles; un sello de escáner, unas pocas decenas).
+    minCharsPerPage: Number(process.env.TODOPDF_OCR_MIN_CHARS_PER_PAGE || 40)
+  },
+
   // ── Storage (usuarios autenticados) ────────────────────────
   storage: {
     // Directorio final donde se guardan los archivos convertidos

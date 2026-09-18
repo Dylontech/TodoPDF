@@ -34,8 +34,17 @@ function errorHandler(err, req, res, next) {
   }
 
   const status = err.status || 500;
+  // Los errores 4xx son de VALIDACIÓN: su mensaje está escrito para el usuario
+  // («El PDF está protegido con contraseña», «supera el límite de 100 páginas»,
+  // «formato no soportado»…) y por eso se muestra SIEMPRE. Si se enmascarara,
+  // el usuario sólo vería «Error interno del servidor» sin saber qué corregir.
+  // Los 5xx sí se ocultan en producción para no filtrar detalles internos
+  // (salvo TODOPDF_DEBUG_ERRORS=true, pensado para diagnosticar sin terminal).
+  const isServerError = status >= 500;
   const message =
-    config.env !== 'production' || exposeErrors ? err.message : 'Error interno del servidor.';
+    !isServerError || config.env !== 'production' || exposeErrors
+      ? err.message
+      : 'Error interno del servidor.';
 
   // Registro en el servidor (sin exponer detalles sensibles al cliente)
   console.error('[TodoPDF:error]', err);

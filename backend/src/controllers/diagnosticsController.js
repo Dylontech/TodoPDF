@@ -66,13 +66,14 @@ async function checkModule(name) {
 /** GET /api/diagnostics */
 async function getDiagnostics(req, res, next) {
   try {
-    const [gs, pdfinfo, soffice, ytdlp, python3, ffmpeg] = await Promise.all([
+    const [gs, pdfinfo, soffice, ytdlp, python3, ffmpeg, tesseract] = await Promise.all([
       binVersion('gs'),
       binVersion('pdfinfo', ['-v']),
       binVersion('soffice'),
       binVersion('yt-dlp'),
       binVersion('python3', ['--version']),
-      binVersion('ffmpeg', ['-version'])
+      binVersion('ffmpeg', ['-version']),
+      binVersion(config.ocr.tesseractPath, ['--version'])
     ]);
 
     const [storageW, tempW] = await Promise.all([
@@ -103,7 +104,7 @@ async function getDiagnostics(req, res, next) {
       env: config.env,
       processUser: { uid: process.getuid(), gid: process.getgid() },
       session: { hasUserId: !!(req.session && req.session.userId) },
-      binaries: { gs, pdfinfo, soffice, ytdlp, python3, ffmpeg },
+      binaries: { gs, pdfinfo, soffice, ytdlp, python3, ffmpeg, tesseract },
       storage: { dir: config.storage.storageDir, writable: storageW },
       temp: { dir: config.storage.tempDir, writable: tempW },
       modules: { 'file-type': fileType, sharp, 'pdf-lib': pdfLib, pptxgenjs, archiver },

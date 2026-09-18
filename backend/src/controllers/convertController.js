@@ -166,7 +166,10 @@ async function convertPdfToOffice(req, res, next) {
     const pdfBuffer = await getInputBuffer(req.files);
 
     // 2) Conversión con LibreOffice (temp aislado; concurrencia limitada)
-    const out = await officeLimit(() => officeService.pdfToOffice(pdfBuffer, format));
+    // `ocr` (auto|on|off) permite forzar o desactivar el OCR de escaneos.
+    const out = await officeLimit(() =>
+      officeService.pdfToOffice(pdfBuffer, format, { ocr: req.body.ocr })
+    );
 
     // 3) FLUJO AUTENTICADO: persistir en el volumen + historial
     if (userId) {

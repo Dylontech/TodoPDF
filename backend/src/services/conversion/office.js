@@ -11,6 +11,8 @@ const { detectFileType } = require('../../utils/files');
 const { httpError } = require('../../utils/errors');
 const { runCommand } = require('../../utils/exec');
 const { pdfToImages } = require('./pdfToImages');
+const { assertPdfReadable, isScannedPdf } = require('./pdfUtils');
+const { ocrToSearchablePdf, isAvailable: isOcrAvailable } = require('./ocr');
 const {
   OFFICE_FORMATS,
   OUTPUT_FORMATS,
@@ -70,9 +72,12 @@ function mimeForOffice(ext) {
  *
  * @param {Buffer} pdfBuffer Contenido del PDF en memoria.
  * @param {string} targetExt Formato de salida (docx|doc|odt|pptx|ppt).
+ * @param {object} [opts]    { ocr: 'auto'|'on'|'off' } — control del OCR de
+ *   escaneos. 'auto' (por defecto) decide según la capa de texto del PDF,
+ *   'on' lo fuerza y 'off' lo desactiva (el escaneo queda como imagen).
  * @returns {Promise<Buffer>} El documento Office convertido.
  */
-async function pdfToOffice(pdfBuffer, targetExt) {
+async function pdfToOffice(pdfBuffer, targetExt, opts = {}) {
   const fmt = PDF_TARGET_FORMATS[targetExt];
   if (!fmt) throw httpError(400, `Formato de Office no soportado: "${targetExt}".`);
 
@@ -80,14 +85,36 @@ async function pdfToOffice(pdfBuffer, targetExt) {
   if (!type || type.mime !== 'application/pdf') {
     throw httpError(400, 'El archivo debe ser un PDF válido.');
   }
+  // Los PDFs con contraseña no los puede abrir ni LibreOffice ni Ghostscript:
+  // se avisa con un 400 claro en vez de fallar más adelante con un 500.
+  await assertPdfReadable(pdfBuffer);
 
   // Presentaciones: diapositiva por página (ruta con imágenes, no Writer)
   if (fmt.mode === 'slides') return pdfToPptx(pdfBuffer);
   if (fmt.mode === 'slides-ppt') return pdfToPpt(pdfBuffer);
 
+  // PDF escaneado (sin capa de texto útil): se hace OCR ANTES de importarlo.
+  // El OCR devuelve un PDF "buscable" (imagen + texto invisible) y el
+  // importador de LibreOffice extrae las dos cosas → el documento final tiene
+  // la página como imagen Y el texto editable. Sin esto, un escaneo daba un
+  // DOCX sin texto (o sólo con el sello del escáner).
+  const ocrMode = opts.ocr === 'on' || opts.ocr === 'off' ? opts.ocr : 'auto';
+  const needsOcr =
+    ocrMode === 'on' ? true : ocrMode === 'off' ? false : await isScannedPdf(pdfBuffer);
+
+  let input = pdfBuffer;
+  if (needsOcr) {
+    if (await isOcrAvailable()) {
+      input = await ocrToSearchablePdf(pdfBuffer);
+    } else if (ocrMode === 'on') {
+      // Se pidió OCR explícitamente y el servidor no puede hacerlo.
+      throw httpError(400, 'El OCR no está disponible en este servidor.');
+    }
+  }
+
   // Procesadores de texto (docx/doc/odt): import Writer + export del filtro
   return runSoffice({
-    input: pdfBuffer,
+    input,
     inputName: 'input.pdf',
     // El PDF siempre se importa con el filtro de Writer
     infilter: 'writer_pdf_import',

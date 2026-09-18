@@ -1,6 +1,7 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import UploadForm from '../components/UploadForm.astro';
+import type { Field } from '../lib/formTypes';
 
 // Formatos de salida admitidos por el backend (PDF → Office).
 // - docx/doc/odt: procesadores de texto (import Writer de LibreOffice).
@@ -12,6 +13,21 @@ const formats = [
   { value: 'pptx', label: 'PPTX (PowerPoint)' },
   { value: 'ppt', label: 'PPT (PowerPoint 97)' }
 ];
+
+// Control del OCR de escaneos (el backend decide por defecto según el PDF).
+const fields: Field[] = [
+  {
+    name: 'ocr',
+    label: 'Reconocer texto (OCR)',
+    type: 'select',
+    default: 'auto',
+    options: [
+      { value: 'auto', label: 'Automático (recomendado)' },
+      { value: 'on', label: 'Siempre — forzar OCR en escaneos' },
+      { value: 'off', label: 'Nunca — solo la imagen, sin texto' }
+    ]
+  }
+];
 ---
 
 <Layout title="PDF a Office">
@@ -22,11 +38,17 @@ const formats = [
       En PPTX/PPT cada página del PDF se convierte en una diapositiva.
       La conversión es «best effort»: el layout puede variar respecto al PDF.
     </p>
+    <p class="privacy-note">
+      🔎 Si tu PDF es un <strong>escaneo o una foto</strong> (sin texto
+      seleccionable), se le aplica <strong>OCR</strong> y el documento sale con
+      la página como imagen <em>y</em> con el texto reconocido, ya editable.
+    </p>
     <UploadForm
       endpoint="/api/convert/pdf-to-office"
       accept="application/pdf"
       formatSelector={true}
       formats={formats}
+      fields={fields}
     />
     <p class="privacy-note">
       ⚠️ Estas herramientas requieren un espacio de trabajo temporal en el

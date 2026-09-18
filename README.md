@@ -12,7 +12,7 @@ Aplicación web **autoalojada** estilo iLovePDF con un enfoque estricto en la **
 | ------------------ | ----------------------------------------- | ------------------------------------- |
 | PDF → Imágenes     | Ghostscript por pipes, ZIP en memoria     | Guarda JPG/PNG… en volumen + historial |
 | Imágenes → PDF     | sharp + pdf-lib en Buffers, PDF en memoria | Guarda PDF en volumen + historial      |
-| PDF → Office (DOCX/DOC/ODT/PPTX/PPT) | LibreOffice + pptxgenjs en temp aislado | Guarda documento en volumen + historial |
+| PDF → Office (DOCX/DOC/ODT/PPTX/PPT) | LibreOffice + pptxgenjs en temp aislado (**OCR** si el PDF es un escaneo) | Guarda documento en volumen + historial |
 | Office → PDF (DOC/DOCX/ODT/RTF/TXT/XLS/XLSX/ODS/CSV/PPT/PPTX/ODP) | LibreOffice en temp aislado | Guarda PDF en volumen + historial |
 | Convertir documento (Office → Office) | — (exclusivo de usuarios registrados) | LibreOffice en temp aislado; guarda el documento en volumen + historial |
 
@@ -24,6 +24,32 @@ Aplicación web **autoalojada** estilo iLovePDF con un enfoque estricto en la **
    conversión** que se elimina SIEMPRE al terminar (éxito o error). No persiste nada para invitados.
 2. **Usuarios autenticados:** los archivos se procesan, se guardan en un **volumen del servidor**
    (`uploads`) y cada conversión se registra en el **historial** de la base de datos (Knex).
+
+## OCR de PDFs escaneados (PDF → Word)
+
+Convertir un PDF **escaneado** (o una foto exportada a PDF) con LibreOffice daba un documento con la
+página como imagen pero **sin texto editable**: ese tipo de PDF no tiene capa de texto y el importador
+de LibreOffice no hace OCR. Ahora se detecta automáticamente y se aplica **OCR con tesseract**:
+
+1. Se comprueba la capa de texto con `pdftotext` y se combinan dos señales: la **densidad de texto por
+   página** (`TODOPDF_OCR_MIN_CHARS_PER_PAGE`, 40 por defecto) y el tamaño de la **imagen de página**
+   (`pdfimages`). Así los escaneos con un sello residual del escáner (o un PDF "imprimir a PDF" con la
+   URL o la fecha) también se tratan como escaneo, mientras que un PDF digital corto sigue por la ruta
+   rápida. Si la detección automática no acierta, el formulario permite **forzar o desactivar el OCR**
+   (campo `ocr` = `auto` | `on` | `off`).
+2. Si no hay texto útil, se rasteriza cada página a PNG con **Ghostscript** (`TODOPDF_OCR_DPI`, 300 dpi).
+3. **tesseract** reconoce el texto y genera un PDF "buscable": conserva la imagen de la página **y**
+   añade el texto como capa invisible.
+4. El importador de PDF de LibreOffice extrae **ambas** cosas → el DOCX/DOC/ODT final tiene la página
+   escaneada como imagen **y** el texto reconocido, ya editable.
+
+- Idiomas: `TODOPDF_OCR_LANGS` (por defecto `spa+eng`; se filtran contra los instalados en la imagen).
+- Guardarraíles: `TODOPDF_OCR_TIMEOUT_MS` por página y `TODOPDF_OCR_MAX_PAGES` (50 por defecto).
+- Todo el trabajo intermedio ocurre en un **directorio temporal aislado** que se borra SIEMPRE.
+- Los **PDFs protegidos con contraseña** devuelven un **400 con un mensaje claro** en lugar de un
+  error interno (ni Ghostscript, ni LibreOffice, ni pdf-lib pueden abrirlos).
+- En local, para probarlo: `sudo pacman -S tesseract tesseract-data-spa tesseract-data-eng`
+  (Debian/Ubuntu: `apt install tesseract-ocr tesseract-ocr-spa tesseract-ocr-eng`).
 
 ## Descargador de vídeos (solo usuarios registrados)
 
@@ -186,6 +212,7 @@ y `cd frontend && npm install && npm run dev` (web en :4321, proxya `/api` a :30
 | `poppler-utils`  | Utilidades PDF (`pdfinfo`, `pdftoppm`)                        |
 | `imagemagick`    | Utilidades de imagen adicionales                             |
 | `libreoffice-*`  | Conversión PDF ↔ Office (writer/calc/impress)                |
+| `tesseract-ocr`  | OCR de PDFs escaneados en PDF → Word (`-spa`, `-eng`)         |
 | `ffmpeg`         | Merge de flujos y conversión de audio del descargador        |
 | `yt-dlp`         | Descargador de vídeos (requiere `python3`)                   |
 | `tini`           | Init ligero para el manejo de señales en el contenedor       |

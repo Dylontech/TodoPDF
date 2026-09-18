@@ -5,7 +5,7 @@ const config = require('../../config');
 const { detectFileType } = require('../../utils/files');
 const { httpError } = require('../../utils/errors');
 const { runCommand } = require('../../utils/exec');
-const { countPages } = require('./pdfUtils');
+const { countPages, assertPdfReadable } = require('./pdfUtils');
 
 /**
  * ─────────────────────────────────────────────────────────────
@@ -30,12 +30,13 @@ async function pdfToImages(pdfBuffer, opts = {}) {
   if (!type || type.mime !== 'application/pdf') {
     throw httpError(400, 'El archivo debe ser un PDF válido.');
   }
+  // Ghostscript no puede abrir PDFs con contraseña: se avisa con un 400 claro
+  await assertPdfReadable(pdfBuffer);
 
   const pageCount = await countPages(pdfBuffer);
   if (pageCount > config.limits.maxPages) {
     throw httpError(400, `El PDF supera el límite de ${config.limits.maxPages} páginas.`);
   }
-
   // Formatos que Ghostscript genera directamente
   const gsDevice =
     format === 'png' ? 'png16m'
