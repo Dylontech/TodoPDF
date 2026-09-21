@@ -19,8 +19,8 @@ FROM node:22-bookworm-slim
 
 # La suite bookworm-updates publica a veces Release con fecha futura respecto
 # al reloj local ("not valid yet") → se desactiva la validación de fecha apt.
-RUN apt-get -o Acquire::Check-Valid-Until=false -o Acquire::Check-Date=false update \
-    && apt-get install -y --no-install-recommends \
+RUN apt-get -o Acquire::Check-Valid-Until=false -o Acquire::Check-Date=false -o Acquire::Retries=5 update \
+    && apt-get -o Acquire::Retries=5 install -y --no-install-recommends \
         ghostscript poppler-utils imagemagick \
         libreoffice-writer libreoffice-calc libreoffice-impress \
         fonts-noto fonts-noto-cjk fonts-dejavu-core \
@@ -55,6 +55,8 @@ RUN npm install --omit=dev --no-audit --no-fund \
 # opcional y ya no se instala sola → sin él, "Quitar objetos de imagen"
 # (scripts/inpaint.py y auto_mask.py, que hacen `import cv2`) falla con
 # ModuleNotFoundError: No module named 'cv2'.
+# --retries/--timeout: en un VPS una descarga de PyPI puede cortarse; pip
+# reintenta en vez de abortar el build.
 ENV VIRTUAL_ENV=/opt/rembg
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 # Modelo u2net precargado en build (evita descargarlo en la 1ª petición).
@@ -67,10 +69,17 @@ ENV OMP_NUM_THREADS=2
 # se deja escribible el __pycache__ de los paquetes del venv (fix definitivo).
 ENV NUMBA_CACHE_DIR=/tmp/numba-cache
 RUN python3 -m venv "$VIRTUAL_ENV" \
-    && pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir "rembg[cpu]" opencv-python-headless yt-dlp vtracer \
+    && pip install --retries 10 --timeout 60 --no-cache-dir --upgrade pip \
+    && pip install --retries 10 --timeout 60 --no-cache-dir "rembg[cpu]" opencv-python-headless yt-dlp vtracer \
     && mkdir -p /models && chmod 777 /models \
-    && python3 -c "from rembg import new_session; new_session('u2net')" \
+    # Descarga del modelo u2net (176 MB desde GitHub): es el paso más frágil del
+    # build en redes inestables, así que se reintenta y luego se COMPRUEBA que
+    # el fichero existe y no está truncado (si no, el build debe fallar aquí).
+    && ( for intento in 1 2 3 4 5; do \
+           python3 -c "from rembg import new_session; new_session('u2net')" && break; \
+           echo "Descarga de u2net fallida; reintentando en 10 s..."; sleep 10; \
+         done ) \
+    && find /models -name u2net.onnx -size +10M | grep -q . \
     # El proceso final corre como todopdf: el modelo y su dir deben ser
     # legibles (u2net.onnx se descarga con permisos 600 de root → EACCES).
     && chown -R todopdf:todopdf /models \
@@ -86,7 +95,13 @@ RUN python3 -m venv "$VIRTUAL_ENV" \
 # no espere a descargarlo y para que corra como todopdf (/models ya se entrega
 # a todopdf en el paso de rembg). ~92MB; convenciones y preproceso en
 # scripts/inpaint.py (compatibles con onnxruntime CPU).
-RUN python3 -c "import urllib.request; urllib.request.urlretrieve('https://huggingface.co/opencv/inpainting_lama/resolve/main/inpainting_lama_2025jan.onnx', '/models/big-lama.onnx')" \
+# Descarga con reintentos + comprobación de tamaño: HuggingFace puede devolver
+# cortes o redirecciones fallidas en redes inestables (VPS).
+RUN ( for intento in 1 2 3 4 5; do \
+        python3 -c "import urllib.request; urllib.request.urlretrieve('https://huggingface.co/opencv/inpainting_lama/resolve/main/inpainting_lama_2025jan.onnx', '/models/big-lama.onnx')" && break; \
+        echo "Descarga de big-lama fallida; reintentando en 10 s..."; sleep 10; \
+      done ) \
+    && find /models -name big-lama.onnx -size +10M | grep -q . \
     && chown todopdf:todopdf /models/big-lama.onnx
 
 # ── OCR de PDFs escaneados (tesseract) ──────────────────────
@@ -94,8 +109,8 @@ RUN python3 -c "import urllib.request; urllib.request.urlretrieve('https://huggi
 # no invalida las capas caras anteriores (apt base, npm, venv de rembg y
 # modelos ONNX), que son las que hacen lento el rebuild.
 # spa = español, eng = inglés (TODOPDF_OCR_LANGS=spa+eng por defecto).
-RUN apt-get -o Acquire::Check-Valid-Until=false -o Acquire::Check-Date=false update \
-    && apt-get install -y --no-install-recommends \
+RUN apt-get -o Acquire::Check-Valid-Until=false -o Acquire::Check-Date=false -o Acquire::Retries=5 update \
+    && apt-get -o Acquire::Retries=5 install -y --no-install-recommends \
         tesseract-ocr tesseract-ocr-spa tesseract-ocr-eng \
     && rm -rf /var/lib/apt/lists/*
 

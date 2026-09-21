@@ -293,6 +293,40 @@ docker compose down          # conserva volúmenes
 docker compose down -v       # ELIMINA volúmenes (datos)
 ```
 
+### Si el build falla en el servidor (VPS)
+
+La imagen del backend **pesa ~4,5 GB** (LibreOffice + Ghostscript + tesseract + Python con
+onnxruntime/opencv + modelos ONNX) y durante el build Docker necesita además espacio para las capas
+intermedias: reserva **~10 GB libres** antes de construir. Es la causa número uno de fallos en un VPS.
+
+Para **ver el error exacto** (Docker solo imprime las últimas líneas y suele cortar justo la traza):
+
+```bash
+# En el VPS, dentro del repo
+docker compose build backend --progress=plain > /tmp/build.log 2>&1; tail -80 /tmp/build.log
+```
+
+Comprobaciones rápidas:
+
+```bash
+df -h /                     # ¿queda espacio? (necesitas ~10 GB libres)
+docker compose version      # debe ser v2 (el compose v1 de Python NO entiende este fichero)
+docker version              # Docker 20.10 o superior
+```
+
+Causas típicas y solución:
+
+| Síntoma en el log | Causa | Solución |
+| ----------------- | ----- | -------- |
+| `no space left on device` | Disco lleno | `docker image prune -f && docker builder prune -f` (**nunca** `--volumes`: borra los datos) y reintentar |
+| `Killed` / `exit code 137` en `npm install` o `pip install` | Sin memoria | Añade swap temporal o construye con `DOCKER_BUILDKIT=1` (usa menos RAM) |
+| `Could not resolve host` / `Connection reset` en apt, pip o la descarga de modelos | Red inestable | El Dockerfile ya reintenta apt (5), pip (10) y las dos descargas de modelos (5 intentos cada una); reintenta el build |
+| `network mode "host" is not supported` | El daemon no permite red host en el build | Quita las dos líneas `network: host` de los bloques `build:` en `docker-compose.yml` (solo eran un remedio para redes con IPv6 roto) |
+| `Unsupported config option` / `Additional property name is not allowed` | `docker compose` v1 (Python) | Instala/compose v2: `docker compose version` debe responder `v2.x` |
+
+Y antes de nada, asegúrate de que el servidor tiene el código nuevo: los cambios se despliegan con
+`git pull`, así que hay que hacer `git push` desde la máquina de desarrollo.
+
 ### Permisos del volumen `/data` (importante para upgrades)
 
 El backend corre como el usuario **sin privilegios** `todopdf` (UID/GID **1001**,
