@@ -11,10 +11,15 @@ Aplicación web **autoalojada** estilo iLovePDF con un enfoque estricto en la **
 | Herramienta        | Flujo invitado (RAM)                      | Flujo autenticado (disco + historial) |
 | ------------------ | ----------------------------------------- | ------------------------------------- |
 | PDF → Imágenes     | Ghostscript por pipes, ZIP en memoria     | Guarda JPG/PNG… en volumen + historial |
-| Imágenes → PDF     | sharp + pdf-lib en Buffers, PDF en memoria | Guarda PDF en volumen + historial      |
+| Imágenes → PDF     | sharp + pdf-lib en Buffers, PDF en memoria (JPG, PNG, WebP, GIF, TIFF) | Guarda PDF en volumen + historial      |
 | PDF → Office (DOCX/DOC/ODT/PPTX/PPT) | LibreOffice + pptxgenjs en temp aislado (**OCR** si el PDF es un escaneo) | Guarda documento en volumen + historial |
 | Office → PDF (DOC/DOCX/ODT/RTF/TXT/XLS/XLSX/ODS/CSV/PPT/PPTX/ODP) | LibreOffice en temp aislado | Guarda PDF en volumen + historial |
 | Convertir documento (Office → Office) | — (exclusivo de usuarios registrados) | LibreOffice en temp aislado; guarda el documento en volumen + historial |
+
+> **Formatos admitidos en Imágenes → PDF:** JPG, PNG, WebP, GIF y TIFF. **BMP** y los
+> **HEIC de iPhone** no están soportados por `sharp`/`libvips` (este build no incluye
+> decoder HEVC), así que la API responde `400` con el motivo en vez de un 500 opaco.
+> La página `/imagenes-a-pdf` avisa de ello y limita el selector de archivos.
 
 ## Flujos de privacidad
 
@@ -182,8 +187,13 @@ anteriores. Según tu distribución:
       font-noto font-noto-cjk ffmpeg yt-dlp tini
   ```
 
-Para ejecutar en local: `cd backend && npm install && npm run dev` (API en :3000, aplica migraciones)
-y `cd frontend && npm install && npm run dev` (web en :4321, proxya `/api` a :3000).
+Para ejecutar en local: `cd backend && npm install && npm run dev` (API en :3200, aplica migraciones)
+y `cd frontend && npm install && npm run dev` (web en :4321, proxya `/api` a :3200).
+
+> El puerto del backend de desarrollo se cambia con `TODOPDF_PORT` en `backend/.env`
+> (por defecto: 3200, porque 3000/3100 pueden estar ocupados por otros proyectos).
+> En Docker no hace falta: el backend escucha en 3000 dentro de la red del compose
+> y solo el frontend publica un puerto al host.
 
 ## Dependencias del proyecto
 
@@ -377,7 +387,7 @@ Con ese flag, la respuesta 500 incluye `code` y `message` reales (p. ej.
 | POST   | `/api/auth/logout`               | Cierra sesión                                     |
 | GET    | `/api/auth/me`                   | Devuelve el usuario actual (o 401)                |
 | POST   | `/api/convert/pdf-to-images`     | `multipart` campo `files` (1) + `format` + `quality` |
-| POST   | `/api/convert/images-to-pdf`     | `multipart` campo `files` (hasta 10)              |
+| POST   | `/api/convert/images-to-pdf`     | `multipart` campo `files` (hasta 10): JPG, PNG, WebP, GIF o TIFF |
 | POST   | `/api/convert/pdf-to-office`     | `multipart` campo `files` (1) + `format` (`docx`\|`doc`\|`odt`\|`pptx`\|`ppt`) |
 | POST   | `/api/convert/office-to-pdf`     | `multipart` campo `files` (1): DOCX/DOC/XLSX/PPTX/PPT/ODT |
 | POST   | `/api/convert/office-to-office`  | `multipart` campo `files` (1) + `format` (`docx`\|`odt`\|`doc`\|`rtf`\|`txt`\|`xlsx`\|`ods`\|`xls`\|`csv`\|`pptx`\|`odp`\|`ppt`\|`pdf`) — solo usuarios con sesión |

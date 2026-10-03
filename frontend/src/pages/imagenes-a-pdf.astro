@@ -7,12 +7,16 @@ import UploadForm from '../components/UploadForm.astro';
   <section class="tool">
     <h1>Imágenes → PDF</h1>
     <p>
-      Sube varias imágenes (JPG, PNG, WebP, GIF…) y las combinamos en un único PDF,
+      Sube varias imágenes (JPG, PNG, WebP, GIF o TIFF) y las combinamos en un único PDF,
       una imagen por página.
+    </p>
+    <p class="privacy-note">
+      Las fotos de <strong>iPhone (HEIC)</strong> y los <strong>BMP</strong> no están soportados:
+      conviértelos antes a JPG o PNG.
     </p>
     <UploadForm
       endpoint="/api/convert/images-to-pdf"
-      accept="image/*"
+      accept="image/jpeg,image/png,image/webp,image/gif,image/tiff,.jpg,.jpeg,.png,.webp,.gif,.tif,.tiff"
       multiple={true}
     />
   </section>

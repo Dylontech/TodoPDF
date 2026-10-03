@@ -5,7 +5,8 @@ import sitemap from '@astrojs/sitemap';
 /**
  * TodoPDF — Frontend estático.
  * En producción nginx sirve el build y proxya /api al backend.
- * En desarrollo (astro dev) se proxya /api al backend local (puerto 3000).
+ * En desarrollo (astro dev) se proxya /api al backend local (puerto 3200;
+ * el 3000/3100 los usan otros proyectos).
  */
 
 // Páginas que NO deben indexarse (requieren sesión o son de autenticación).
@@ -40,7 +41,7 @@ export default defineConfig({
   vite: {
     server: {
       proxy: {
-        '/api': 'http://localhost:3000'
+        '/api': 'http://localhost:3200'
       }
     }
   }
