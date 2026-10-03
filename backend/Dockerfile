@@ -104,6 +104,19 @@ RUN ( for intento in 1 2 3 4 5; do \
     && find /models -name big-lama.onnx -size +10M | grep -q . \
     && chown todopdf:todopdf /models/big-lama.onnx
 
+# Modelo Real-ESRGAN x4plus (real-esrgan-x4plus-128.onnx, ~67MB) para
+# "Reescalar imagen" x8/x16. Export ONNX autocontenido (un solo archivo) de
+# bukuroo/RealESRGAN-ONNX (BSD-3). Se descarga en el build para que la 1ª
+# petición no espere y para que corra como todopdf. Mismo patrón de
+# reintentos + comprobación de tamaño que big-lama (redes inestables del VPS).
+# El preproceso/tiling está en scripts/upscale_ai.py (onnxruntime CPU).
+RUN ( for intento in 1 2 3 4 5; do \
+        python3 -c "import urllib.request; urllib.request.urlretrieve('https://huggingface.co/bukuroo/RealESRGAN-ONNX/resolve/main/real-esrgan-x4plus-128.onnx', '/models/real-esrgan-x4plus-128.onnx')" && break; \
+        echo "Descarga de real-esrgan-x4plus fallida; reintentando en 10 s..."; sleep 10; \
+      done ) \
+    && find /models -name real-esrgan-x4plus-128.onnx -size +60M | grep -q . \
+    && chown todopdf:todopdf /models/real-esrgan-x4plus-128.onnx
+
 # ── OCR de PDFs escaneados (tesseract) ──────────────────────
 # Se instala en una capa PROPIA a propósito: así cambiar los idiomas de OCR
 # no invalida las capas caras anteriores (apt base, npm, venv de rembg y

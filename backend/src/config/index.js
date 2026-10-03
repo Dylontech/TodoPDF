@@ -163,6 +163,24 @@ const config = {
     maxConcurrency: Number(process.env.TODOPDF_INPAINT_CONCURRENCY || 1)
   },
 
+  // ── Reescalar imagen (sharp x2/x4 + Real-ESRGAN x8/x16) ─────
+  upscale: {
+    // Python con onnxruntime/opencv (mismo venv que removeBg/vectorize/inpaint)
+    pythonPath: process.env.TODOPDF_UPSCALE_PYTHON || 'python3',
+    // Script Python de superresolución (imagen por stdin, PNG de salida)
+    scriptPath: path.join(__dirname, '../../scripts/upscale_ai.py'),
+    // Ruta al modelo ONNX Real-ESRGAN x4plus (local: backend/.models/, Docker: /models)
+    modelPath: process.env.TODOPDF_UPSCALE_MODEL || '',
+    // Tope de píxeles de SALIDA (268 Mpx ≈ 16384²): evita agotar la RAM al
+    // decodificar/codificar el resultado (x16 de una foto 12MP sería ~12 GB).
+    maxOutputPixels: Number(process.env.TODOPDF_UPSCALE_MAX_OUTPUT_PIXELS || 268_435_456),
+    // Tiempo máximo por imagen (la inferencia de RRDBNet en CPU tarda minutos
+    // en entradas grandes; nginx ya permite hasta 1800 s de proxy_read_timeout)
+    timeoutMs: Number(process.env.TODOPDF_UPSCALE_TIMEOUT_MS || 600_000),
+    // Procesamientos simultáneos (protege la RAM/CPU del servidor)
+    maxConcurrency: Number(process.env.TODOPDF_UPSCALE_CONCURRENCY || 1)
+  },
+
   // ── Creador de flashcards (solo usuarios autenticados) ─────
   flashcards: {
     // Biblioteca de ilustraciones SVG propias (una sola copia, servida por API)

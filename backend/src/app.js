@@ -18,6 +18,7 @@ const downloaderRoutes = require('./routes/downloader.routes');
 const removeBgRoutes = require('./routes/removeBg.routes');
 const vectorizeRoutes = require('./routes/vectorize.routes');
 const inpaintRoutes = require('./routes/inpaint.routes');
+const upscaleRoutes = require('./routes/upscale.routes');
 const flashcardsRoutes = require('./routes/flashcards.routes');
 const flashcardLibraryRoutes = require('./routes/flashcardLibrary.routes');
 const flashcardShareRoutes = require('./routes/flashcardShare.routes');
@@ -109,6 +110,14 @@ const inpaintLimiter = rateLimit({
   message: { error: 'Demasiadas peticiones de eliminación de objetos. Inténtalo más tarde.' }
 });
 
+const upscaleLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiadas peticiones de reescalado. Inténtalo más tarde.' }
+});
+
 // Flashcards: crear/editar mazos y exportar (el usuario ya está autenticado)
 const flashcardsLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -155,6 +164,11 @@ app.use('/api/flashcards/share', flashcardShareLimiter, flashcardShareRoutes);
 app.use('/api/flashcards', flashcardsLimiter, flashcardsRoutes);
 app.use('/api', uploadLimiter, convertRoutes);
 app.use('/api', uploadLimiter, pdfToolsRoutes);
+// Reescalar imagen es MIXTO (x2/x4 público, x8/x16 con sesión): se monta
+// ANTES de los routers auth-only (downloader/removeBg/vectorize/inpaint),
+// que aplican router.use(requireAuth) sin path y por tanto capturarían
+// /upscale con un 401 para invitados aunque la ruta no fuera suya.
+app.use('/api', upscaleLimiter, upscaleRoutes);
 app.use('/api', downloaderLimiter, downloaderRoutes);
 app.use('/api', removeBgLimiter, removeBgRoutes);
 app.use('/api', vectorizeLimiter, vectorizeRoutes);

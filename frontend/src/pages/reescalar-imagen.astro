@@ -1,0 +1,93 @@
+---
+import Layout from '../layouts/Layout.astro';
+import UploadForm from '../components/UploadForm.astro';
+import type { Field, FieldOption } from '../lib/formTypes';
+
+// Formatos de salida admitidos por el backend (PNG sin pérdida por defecto).
+const formats: FieldOption[] = [
+  { value: 'png', label: 'PNG (sin pérdida)' },
+  { value: 'jpg', label: 'JPG' },
+  { value: 'webp', label: 'WebP' }
+];
+
+// Escalas: x2/x4 son interpolación pura (instantáneas, sin cuenta);
+// x8/x16 usan IA Real-ESRGAN y requieren iniciar sesión.
+const fields: Field[] = [
+  {
+    name: 'scale',
+    label: 'Escala',
+    type: 'radio',
+    default: '2',
+    options: [
+      { value: '2', label: 'x2 — rápido' },
+      { value: '4', label: 'x4 — rápido' },
+      { value: '8', label: 'x8 — con IA (requiere cuenta)' },
+      { value: '16', label: 'x16 — con IA (requiere cuenta)' }
+    ]
+  }
+];
+---
+
+<Layout title="Reescalar imagen">
+  <section class="tool">
+    <h1>🔍 Reescalar imagen</h1>
+    <p>
+      Amplía tus imágenes hasta <strong>16 veces</strong> su tamaño original.
+      Las escalas <strong>x2 y x4</strong> son instantáneas (interpolación
+      Lanczos). Las escalas <strong>x8 y x16</strong> usan <strong>IA
+      Real-ESRGAN</strong>, que regenera el detalle en vez de estirar píxeles.
+    </p>
+    <UploadForm
+      endpoint="/api/upscale"
+      accept="image/png,image/jpeg,image/webp,image/gif,image/tiff,.png,.jpg,.jpeg,.webp,.gif,.tif,.tiff"
+      formatSelector={true}
+      formats={formats}
+      fields={fields}
+      submitLabel="Reescalar"
+    />
+    <p id="ai-hint" class="privacy-note" hidden>
+      🔒 Los escalados <strong>x8 y x16 con IA</strong> requieren una
+      <a href="/login">cuenta gratuita</a>: la inferencia es costosa y el
+      resultado se guarda en tu historial para que puedas descargarlo.
+    </p>
+    <p class="privacy-note">
+      ⚠️ <strong>x8/x16 pueden tardar varios minutos</strong> (la IA procesa
+      la imagen por bloques en CPU). Los GIF usan solo el primer fotograma;
+      HEIC y BMP no están soportados. Como invitado, x2/x4 se procesa en
+      memoria y nada se guarda.
+    </p>
+  </section>
+</Layout>
+
+<style>
+  /* Radios de IA bloqueados para invitados (se activan desde el script). */
+  :global(.radio-locked) {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+</style>
+
+<script>
+  // Bloquea los escalados de IA (x8/x16) para usuarios sin sesión.
+  // El backend responde 401 de todas formas: esto es solo UX proactiva.
+  async function lockAiScales() {
+    try {
+      const res = await fetch('/api/auth/me', { credentials: 'include' });
+      const data = await res.json();
+      if (res.ok && data.user) return; // con sesión: todo habilitado
+    } catch {
+      // Sin respuesta de /api/auth/me (¿backend caído?): no bloquear nada,
+      // el 401 del endpoint es la red de seguridad.
+      return;
+    }
+    // Sin sesión: deshabilitar x8/x16 y avisar.
+    for (const value of ['8', '16']) {
+      const input = document.querySelector<HTMLInputElement>(`input[name="scale"][value="${value}"]`);
+      if (!input) continue;
+      input.disabled = true;
+      input.closest('label')?.classList.add('radio-locked');
+    }
+    document.getElementById('ai-hint')?.removeAttribute('hidden');
+  }
+  lockAiScales();
+</script>
