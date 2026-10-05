@@ -22,6 +22,7 @@ const upscaleRoutes = require('./routes/upscale.routes');
 const flashcardsRoutes = require('./routes/flashcards.routes');
 const flashcardLibraryRoutes = require('./routes/flashcardLibrary.routes');
 const flashcardShareRoutes = require('./routes/flashcardShare.routes');
+const adminRoutes = require('./routes/admin.routes');
 const { getDiagnostics } = require('./controllers/diagnosticsController');
 
 const app = express();
@@ -157,6 +158,7 @@ app.get('/api/health', (req, res) => res.json({ ok: true }));
 app.get('/api/diagnostics', getDiagnostics);
 
 app.use('/api/auth', authLimiter, authRoutes);
+app.use('/api/admin', adminRoutes);
 // Flashcards: las rutas PÚBLICAS (biblioteca y enlaces compartidos) se montan
 // ANTES del router privado, que aplica requireAuth a todo su prefijo.
 app.use('/api/flashcards/library', flashcardLibraryLimiter, flashcardLibraryRoutes);

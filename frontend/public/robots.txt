@@ -6,4 +6,4 @@ User-agent: *
 Allow: /
 Disallow: /api/
 
-Sitemap: https://todopdf.dylontech.com/sitemap.xml
+Sitemap: __PUBLIC_SITE_URL__/sitemap.xml

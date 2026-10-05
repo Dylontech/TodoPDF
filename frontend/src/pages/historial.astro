@@ -4,15 +4,36 @@ import Layout from '../layouts/Layout.astro';
 
 <Layout title="Historial" noindex>
   <section class="tool">
-    <h1>Mi historial</h1>
+    <div class="history-heading"><h1>Mi historial</h1><button id="delete-all" class="btn-danger" type="button" hidden>Eliminar todo</button></div>
     <p>Tus conversiones guardadas. Si no has iniciado sesión, serás redirigido.</p>
     <div id="history" class="history">
       <p class="status">Cargando…</p>
     </div>
   </section>
+  <div id="delete-modal" class="modal-overlay" hidden>
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="delete-title">
+      <h2 id="delete-title">Eliminar archivo</h2>
+      <p>Esta acción eliminará el archivo guardado y su entrada del historial.</p>
+      <div class="modal-actions">
+        <button id="cancel-delete" class="btn-outline" type="button">Cancelar</button>
+        <button id="confirm-delete" class="btn-danger" type="button">Eliminar</button>
+      </div>
+    </div>
+  </div>
 </Layout>
 
 <script>
+  type HistoryItem = {
+    id: number;
+    kind: 'conversion' | 'download';
+    type?: string;
+    ext?: string;
+    name: string;
+    size: number;
+    created_at: string;
+    expires_at: string;
+  };
+
   const LABELS: Record<string, string> = {
     'pdf-to-images': 'PDF → Imágenes',
     'images-to-pdf': 'Imágenes → PDF',
@@ -38,6 +59,7 @@ import Layout from '../layouts/Layout.astro';
 
   async function main() {
     const box = document.getElementById('history');
+    if (!box) return;
 
     // 1) Verificar sesión (las cookies viajan automáticamente)
     let me = null;
@@ -64,6 +86,9 @@ import Layout from '../layouts/Layout.astro';
       return;
     }
 
+    const deleteAllButton = document.getElementById('delete-all');
+    if (deleteAllButton) deleteAllButton.hidden = false;
+
     // 3) Renderizar la tabla
     box.innerHTML = `
       <table class="history-table">
@@ -73,29 +98,81 @@ import Layout from '../layouts/Layout.astro';
         <tbody>
           ${history
             .map(
-              (h) => `
+              (h: HistoryItem) => `
                 <tr>
-                  <td>${typeLabel(h.type)}</td>
-                  <td class="truncate" title="${escapeHtml(h.input_filename)}">${escapeHtml(h.input_filename)}</td>
+                  <td>${h.kind === 'download' ? `Descarga (${escapeHtml(h.ext)})` : typeLabel(h.type || '')}</td>
+                  <td class="truncate" title="${escapeHtml(h.name)}">${escapeHtml(h.name)}</td>
                   <td>${formatSize(h.size)}</td>
-                  <td class="col-date">${new Date(h.created_at).toLocaleString('es')}</td>
-                  <td><a class="btn-download" href="/api/convert/${h.id}/download">Descargar</a></td>
+                  <td class="col-date"><span>${new Date(h.created_at).toLocaleString('es')}</span><small>Expira ${new Date(h.expires_at).toLocaleDateString('es')}</small></td>
+                  <td class="history-actions"><a class="btn-download" href="${h.kind === 'download' ? `/api/downloader/${h.id}/download` : `/api/convert/${h.id}/download`}">Descargar</a><button class="btn-delete" type="button" data-kind="${h.kind}" data-id="${h.id}">Eliminar</button></td>
                 </tr>`
             )
             .join('')}
         </tbody>
       </table>`;
+    bindDeleteButtons();
   }
 
-  function formatSize(bytes) {
+  function bindDeleteButtons() {
+    const modal = document.getElementById('delete-modal');
+    const confirmButton = document.getElementById('confirm-delete') as HTMLButtonElement | null;
+    const cancelButton = document.getElementById('cancel-delete');
+    if (!modal || !confirmButton || !cancelButton) return;
+    let pending: { kind: string; id: string; row: HTMLTableRowElement } | { all: true } | null = null;
+    const close = () => { modal.hidden = true; pending = null; };
+    cancelButton.addEventListener('click', close);
+    document.getElementById('delete-all')?.addEventListener('click', () => {
+      pending = { all: true };
+      modal.hidden = false;
+    });
+    document.querySelectorAll<HTMLButtonElement>('.btn-delete').forEach((button) => {
+      button.addEventListener('click', () => {
+        const row = button.closest('tr');
+        if (!row) return;
+        pending = { kind: button.dataset.kind || '', id: button.dataset.id || '', row };
+        modal.hidden = false;
+      });
+    });
+    confirmButton.addEventListener('click', async () => {
+      if (!pending) return;
+      confirmButton.disabled = true;
+      const endpoint = 'all' in pending
+        ? '/api/history'
+        : pending.kind === 'download'
+        ? `/api/downloader/history/${pending.id}`
+        : `/api/history/conversions/${pending.id}`;
+      const response = await fetch(endpoint, { method: 'DELETE', credentials: 'include' });
+      if (response.ok) {
+        if ('all' in pending) {
+          const historyBox = document.getElementById('history');
+          if (historyBox) historyBox.innerHTML = '<p class="status">Tu historial está vacío.</p>';
+          const deleteAllButton = document.getElementById('delete-all');
+          if (deleteAllButton) deleteAllButton.hidden = true;
+        } else {
+          pending.row.remove();
+        }
+        close();
+      } else {
+        alertBox('No se pudo eliminar el archivo.');
+      }
+      confirmButton.disabled = false;
+    });
+  }
+
+  function alertBox(message: string) {
+    const box = document.getElementById('history');
+    if (box) box.insertAdjacentHTML('afterbegin', `<p class="status error">${escapeHtml(message)}</p>`);
+  }
+
+  function formatSize(bytes: number): string {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${(bytes / 1048576).toFixed(1)} MB`;
   }
 
-  function escapeHtml(s) {
+  function escapeHtml(s: unknown): string {
     return String(s).replace(/[&<>"']/g, (c) =>
-      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] || c)
     );
   }
 

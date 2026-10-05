@@ -9,9 +9,19 @@ const path = require('node:path');
 
 require('dotenv').config();
 
+const environment = process.env.TODOPDF_NODE_ENV || 'development';
+const isProduction = environment === 'production';
+
+function secretEnv(name, developmentFallback) {
+  const value = process.env[name];
+  if (value) return value;
+  if (isProduction) throw new Error(`${name} es obligatorio en producción.`);
+  return developmentFallback;
+}
+
 const config = {
   // ── Servidor ───────────────────────────────────────────────
-  env: process.env.TODOPDF_NODE_ENV || 'development',
+  env: environment,
   port: Number(process.env.TODOPDF_PORT || 3000),
   corsOrigin: (process.env.TODOPDF_CORS_ORIGIN || 'http://localhost:8080')
     .split(',')
@@ -19,16 +29,21 @@ const config = {
 
   // ── Sesiones de servidor ───────────────────────────────────
   session: {
-    secret: process.env.TODOPDF_SESSION_SECRET || 'dev-only-change-me',
+    secret: secretEnv('TODOPDF_SESSION_SECRET', 'dev-only-change-me'),
     name: 'todopdf.sid',
     resave: false,
     saveUninitialized: false,
     cookie: {
       httpOnly: true, // no accesible desde JS (anti-XSS)
       sameSite: 'lax',
-      secure: false, // activar si se sirve tras TLS (reverse proxy)
+      secure: process.env.TODOPDF_COOKIE_SECURE === 'true',
       maxAge: 1000 * 60 * 60 * 24 * 7 // 7 días
     }
+  },
+
+  // ── Google Identity Services ──────────────────────────────
+  auth: {
+    googleClientId: process.env.TODOPDF_GOOGLE_CLIENT_ID || ''
   },
 
   // ── Base de datos (MariaDB/MySQL) ──────────────────────────
@@ -36,7 +51,7 @@ const config = {
     host: process.env.TODOPDF_DB_HOST || 'localhost',
     port: Number(process.env.TODOPDF_DB_PORT || 3306),
     user: process.env.TODOPDF_DB_USER || 'todopdf',
-    password: process.env.TODOPDF_DB_PASSWORD || 'todopdf_secret_password',
+    password: secretEnv('TODOPDF_DB_PASSWORD', 'todopdf_secret_password'),
     database: process.env.TODOPDF_DB_NAME || 'todopdf'
   },
 
@@ -95,6 +110,18 @@ const config = {
     storageDir: process.env.TODOPDF_STORAGE_DIR || '/data/storage',
     // Directorio temporal para los uploads autenticados (se limpia tras procesar)
     tempDir: process.env.TODOPDF_TEMP_DIR || '/data/tmp'
+  },
+
+  // ── Administración y retención del historial ─────────────
+  admin: {
+    emails: (process.env.TODOPDF_ADMIN_EMAILS || '')
+      .split(',')
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean)
+  },
+  retention: {
+    days: Number(process.env.TODOPDF_RETENTION_DAYS || 14),
+    intervalMs: Number(process.env.TODOPDF_RETENTION_INTERVAL_MS || 60 * 60 * 1000)
   },
 
   // ── Descargador de vídeos (yt-dlp, solo usuarios autenticados) ──

@@ -163,9 +163,27 @@ Sección **exclusiva para cuentas con sesión iniciada** para crear tarjetas de 
 - **Python 3 + venv con `rembg` y `vtracer`** — quitar fondo de imagen y vectorizar a SVG (ver
   [Dependencias Python](#dependencias-python-venv)).
 
+### Inicio de sesión con Google
+
+El login admite Google Identity Services. Crea un cliente OAuth de tipo **Aplicación web** en Google
+Cloud Console y añade el origen público de la aplicación en los orígenes autorizados. Después define
+el mismo Client ID en el entorno del despliegue:
+
+```dotenv
+PUBLIC_GOOGLE_CLIENT_ID=1234567890-abc.apps.googleusercontent.com
+```
+
+`PUBLIC_GOOGLE_CLIENT_ID` se incorpora al build del frontend y también configura la audiencia que el
+backend valida (`TODOPDF_GOOGLE_CLIENT_ID`). En local, reinicia Astro después de cambiarlo; con Docker,
+usa `docker compose up --build -d` para reconstruir el frontend.
+
 ### Opción A — Docker (recomendado)
 
 La imagen del backend ya instala todas las herramientas de sistema: no necesitas instalar nada más.
+Antes de iniciar el stack, copia `.env.example` a `.env` y completa como mínimo
+`TODOPDF_SESSION_SECRET`, `TODOPDF_DB_PASSWORD`, `TODOPDF_DB_ROOT_PASSWORD`, `TODOPDF_CORS_ORIGIN`,
+`PUBLIC_SITE_URL` y `PUBLIC_GOOGLE_CLIENT_ID`. Puedes generar secretos con
+`openssl rand -hex 32`. Compose detiene el arranque si faltan los valores obligatorios.
 
 ### Opción B — Desarrollo local (sin Docker)
 
@@ -384,6 +402,7 @@ Con ese flag, la respuesta 500 incluye `code` y `message` reales (p. ej.
 | ------ | -------------------------------- | ------------------------------------------------ |
 | POST   | `/api/auth/register`             | Crea cuenta (`{ email, password }`)               |
 | POST   | `/api/auth/login`                | Inicia sesión (cookie httpOnly)                   |
+| POST   | `/api/auth/google`               | Valida credential de Google y crea/vincula cuenta |
 | POST   | `/api/auth/logout`               | Cierra sesión                                     |
 | GET    | `/api/auth/me`                   | Devuelve el usuario actual (o 401)                |
 | POST   | `/api/convert/pdf-to-images`     | `multipart` campo `files` (1) + `format` + `quality` |
@@ -393,16 +412,35 @@ Con ese flag, la respuesta 500 incluye `code` y `message` reales (p. ej.
 | POST   | `/api/convert/office-to-office`  | `multipart` campo `files` (1) + `format` (`docx`\|`odt`\|`doc`\|`rtf`\|`txt`\|`xlsx`\|`ods`\|`xls`\|`csv`\|`pptx`\|`odp`\|`ppt`\|`pdf`) — solo usuarios con sesión |
 | GET    | `/api/convert/:id/download`      | Descarga una conversión guardada (solo dueño)     |
 | GET    | `/api/history`                   | Historial de conversiones del usuario (solo auth) |
+| DELETE | `/api/history`                   | Elimina todo el historial propio y sus archivos    |
+
+Tras actualizar el esquema, ejecuta `npm run migrate` desde `backend` (o la migración equivalente
+del contenedor) antes de probar el login con Google. En producción HTTPS configura
+`TODOPDF_COOKIE_SECURE=true`; en desarrollo HTTP debe permanecer en `false`.
+| DELETE | `/api/history/conversions/:id`   | Elimina una conversión propia y su archivo         |
 | POST   | `/api/downloader/info`           | Metadata de un vídeo (solo auth, `{ url }`)        |
 | POST   | `/api/downloader/download`       | Descarga vídeo/audio (solo auth, `{ url, kind }`)  |
 | GET    | `/api/downloader/history`        | Historial de descargas del usuario (solo auth)     |
+| DELETE | `/api/downloader/history/:id`    | Elimina una descarga propia y su archivo            |
 | GET    | `/api/downloader/:id/download`   | Descarga del archivo guardado (solo dueño)         |
+| GET    | `/api/admin/users`               | Lista usuarios (solo admin)                        |
+| GET    | `/api/admin/users/:id/history`   | Historial de un usuario (solo admin)               |
+| DELETE | `/api/admin/users/:id/history`   | Elimina todo el historial de un usuario (solo admin) |
+| DELETE | `/api/admin/history/:tabla/:id`  | Elimina historial ajeno y su archivo (solo admin)  |
 | POST   | `/api/vectorize`                 | Vectoriza una imagen a SVG (solo auth, `files` + `mode`) |
 | POST   | `/api/inpaint/auto-mask`         | Máscara automática por clic (solo auth, `files` + `x`/`y`) |
 | POST   | `/api/inpaint`                   | Quita objetos de una imagen (solo auth, `files` + `mask`) |
 
 > Invitado: los endpoints de conversión devuelven el archivo (ZIP/JPG/PDF/Office) directamente.
 > Autenticado: devuelven `{ id, ... }`; descarga vía `/api/convert/:id/download`.
+
+### Administración y retención
+
+Los usuarios incluidos en `TODOPDF_ADMIN_EMAILS` reciben el rol `admin` al registrarse o al
+arrancar el backend. La página `/admin` permite consultar usuarios y eliminar sus archivos del
+historial. El servicio `cleanup` de Docker ejecuta la limpieza automática cada hora y elimina los
+resultados de `conversions` y `downloads` con más de 14 días (configurable con
+`TODOPDF_RETENTION_DAYS`). Requiere compartir el volumen `uploads` con el backend.
 
 ## Migraciones
 

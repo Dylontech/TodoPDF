@@ -3,6 +3,7 @@
 const app = require('./app');
 const config = require('./config');
 const db = require('./config/db');
+const authService = require('./services/authService');
 
 /**
  * Punto de entrada del backend.
@@ -13,6 +14,8 @@ async function main() {
     // Migraciones automáticas al arrancar (conveniente para el MVP)
     await db.migrate.latest();
     console.log('[TodoPDF] Migraciones aplicadas.');
+    const promoted = await authService.promoteConfiguredAdmins();
+    if (promoted > 0) console.log(`[TodoPDF] Administradores configurados promovidos: ${promoted}.`);
 
     const server = app.listen(config.port, () => {
       console.log(`[TodoPDF] API escuchando en http://localhost:${config.port} (${config.env})`);

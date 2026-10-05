@@ -14,6 +14,7 @@ const PRIVATE_PATHS = new Set([
   '/login',
   '/register',
   '/historial',
+  '/admin',
   '/convertir-documento',
   '/descargar-videos',
   '/quitar-fondo',
@@ -26,7 +27,7 @@ const PRIVATE_PATHS = new Set([
 
 export default defineConfig({
   // URL pública de producción (necesaria para el sitemap).
-  site: 'https://todopdf.dylontech.com',
+  site: process.env.PUBLIC_SITE_URL || 'http://localhost:4321',
   output: 'static',
   integrations: [
     // Genera el sitemap automáticamente en cada build, excluyendo

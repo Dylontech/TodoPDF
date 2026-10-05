@@ -7,6 +7,7 @@ const pLimit = require('p-limit');
 
 const config = require('../config');
 const db = require('../config/db');
+const lifecycle = require('../services/historyLifecycleService');
 const downloader = require('../services/downloaderService');
 const { httpError } = require('../utils/errors');
 const { sanitizeFilename } = require('../utils/files');
@@ -171,4 +172,13 @@ async function downloadFile(req, res, next) {
   }
 }
 
-module.exports = { getInfo, download, getHistory, downloadFile };
+async function deleteHistoryItem(req, res, next) {
+  try {
+    await lifecycle.removeRow('downloads', req.params.id, { userId: req.session.userId });
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { getInfo, download, getHistory, downloadFile, deleteHistoryItem };

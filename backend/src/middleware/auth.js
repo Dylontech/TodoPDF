@@ -14,6 +14,17 @@ function requireAuth(req, res, next) {
   return res.status(401).json({ error: 'Debes iniciar sesión para realizar esta acción.' });
 }
 
+/** Exige sesión iniciada con rol administrativo; si no, responde 403. */
+function requireAdmin(req, res, next) {
+  if (!req.session || !req.session.userId) {
+    return res.status(401).json({ error: 'Debes iniciar sesión para realizar esta acción.' });
+  }
+  if (!req.user || req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'No tienes permisos de administrador.' });
+  }
+  return next();
+}
+
 /**
  * Adjunta el usuario actual (req.user) a partir de la sesión.
  * Si la sesión referencia un usuario inexistente, la destruye.
@@ -26,11 +37,11 @@ async function attachUser(req, res, next) {
       return req.session.destroy(() => next());
     }
     // Solo exponemos campos seguros, nunca el hash
-    req.user = { id: user.id, email: user.email };
+    req.user = { id: user.id, email: user.email, role: user.role || 'user' };
     return next();
   } catch (err) {
     return next(err);
   }
 }
 
-module.exports = { requireAuth, attachUser };
+module.exports = { requireAuth, requireAdmin, attachUser };

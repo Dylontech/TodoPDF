@@ -1,0 +1,93 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Administración" noindex>
+  <section class="tool">
+    <h1>Administración</h1>
+    <p>Usuarios e historial almacenado.</p>
+    <div id="admin-status" class="status">Comprobando permisos…</div>
+    <div id="admin-app" hidden>
+      <div id="users" class="admin-users"></div>
+      <div id="user-history" class="history"></div>
+    </div>
+  </section>
+  <div id="admin-modal" class="modal-overlay" hidden>
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="admin-delete-title">
+      <h2 id="admin-delete-title">Eliminar archivo</h2>
+      <p>El archivo se eliminará del almacenamiento y del historial.</p>
+      <div class="modal-actions">
+        <button id="admin-cancel" class="btn-outline" type="button">Cancelar</button>
+        <button id="admin-confirm" class="btn-danger" type="button">Eliminar</button>
+      </div>
+    </div>
+  </div>
+</Layout>
+
+<script>
+  type User = { id: number; email: string; role: string; history_count: number; created_at: string };
+  type HistoryItem = { id: number; table: string; kind: string; name: string; type?: string; ext?: string; size: number; created_at: string };
+  let selectedUser = 0;
+  let pending: { table: string; id: number; row: HTMLTableRowElement } | null = null;
+
+  async function main() {
+    const status = document.getElementById('admin-status');
+    const app = document.getElementById('admin-app');
+    if (!status || !app) return;
+    const me = await fetch('/api/auth/me', { credentials: 'include' }).then((response) => response.json()).catch(() => null);
+    if (!me?.user) { location.href = '/login'; return; }
+    if (me.user.role !== 'admin') { status.textContent = 'No tienes permisos de administrador.'; status.classList.add('error'); return; }
+    const response = await fetch('/api/admin/users', { credentials: 'include' });
+    if (!response.ok) { status.textContent = 'No se pudo cargar la administración.'; status.classList.add('error'); return; }
+    const data = await response.json();
+    status.hidden = true;
+    app.hidden = false;
+    renderUsers(data.users);
+  }
+
+  function renderUsers(users: User[]) {
+    const box = document.getElementById('users');
+    if (!box) return;
+    box.innerHTML = `<div class="admin-user-list">${users.map((user) => `<button class="admin-user" type="button" data-user-id="${user.id}"><strong>${escapeHtml(user.email)}</strong><span>${user.role} · ${user.history_count} archivos</span></button>`).join('')}</div>`;
+    box.querySelectorAll<HTMLButtonElement>('.admin-user').forEach((button) => button.addEventListener('click', () => loadHistory(Number(button.dataset.userId))));
+    if (users[0]) loadHistory(users[0].id);
+  }
+
+  async function loadHistory(userId: number) {
+    selectedUser = userId;
+    const box = document.getElementById('user-history');
+    if (!box) return;
+    box.innerHTML = '<p class="status">Cargando historial…</p>';
+    const response = await fetch(`/api/admin/users/${userId}/history`, { credentials: 'include' });
+    if (!response.ok) { box.innerHTML = '<p class="status error">No se pudo cargar el historial.</p>'; return; }
+    const data = await response.json();
+    if (!data.history.length) { box.innerHTML = `<h2>${escapeHtml(data.user.email)}</h2><p class="status">Este usuario no tiene archivos guardados.</p>`; return; }
+    box.innerHTML = `<h2>${escapeHtml(data.user.email)}</h2><table class="history-table"><thead><tr><th>Tipo</th><th>Nombre</th><th>Tamaño</th><th>Fecha</th><th></th></tr></thead><tbody>${data.history.map((item: HistoryItem) => `<tr><td>${item.kind === 'download' ? `Descarga (${escapeHtml(item.ext || '')})` : escapeHtml(item.type || 'Conversión')}</td><td class="truncate">${escapeHtml(item.name)}</td><td>${formatSize(item.size)}</td><td>${new Date(item.created_at).toLocaleString('es')}</td><td><button class="btn-delete admin-delete" type="button" data-table="${item.table}" data-id="${item.id}">Eliminar</button></td></tr>`).join('')}</tbody></table>`;
+    box.querySelectorAll<HTMLButtonElement>('.admin-delete').forEach((button) => button.addEventListener('click', () => openDelete(button)));
+  }
+
+  function openDelete(button: HTMLButtonElement) {
+    const row = button.closest('tr');
+    const modal = document.getElementById('admin-modal');
+    if (!row || !modal) return;
+    pending = { table: button.dataset.table || '', id: Number(button.dataset.id), row };
+    modal.hidden = false;
+  }
+
+  document.getElementById('admin-cancel')?.addEventListener('click', () => closeDelete());
+  document.getElementById('admin-confirm')?.addEventListener('click', async () => {
+    if (!pending) return;
+    const button = document.getElementById('admin-confirm') as HTMLButtonElement;
+    button.disabled = true;
+    const current = pending;
+    const response = await fetch(`/api/admin/history/${current.table}/${current.id}`, { method: 'DELETE', credentials: 'include' });
+    if (response.ok) { current.row.remove(); closeDelete(); } else { showError('No se pudo eliminar el archivo.'); }
+    button.disabled = false;
+  });
+
+  function closeDelete() { const modal = document.getElementById('admin-modal'); if (modal) modal.hidden = true; pending = null; }
+  function showError(message: string) { const box = document.getElementById('user-history'); if (box) box.insertAdjacentHTML('afterbegin', `<p class="status error">${escapeHtml(message)}</p>`); }
+  function formatSize(bytes: number) { if (bytes < 1024) return `${bytes} B`; if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`; return `${(bytes / 1048576).toFixed(1)} MB`; }
+  function escapeHtml(value: unknown) { return String(value).replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character] || character)); }
+  main();
+</script>

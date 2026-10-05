@@ -1,5 +1,7 @@
 ---
 import Layout from '../layouts/Layout.astro';
+
+const GOOGLE_CLIENT_ID = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID || '';
 ---
 
 <Layout title="Iniciar sesión" noindex>
@@ -20,18 +22,25 @@ import Layout from '../layouts/Layout.astro';
       <p id="status" class="status" role="status"></p>
     </form>
 
+    <div class="auth-divider" aria-hidden="true"><span>o</span></div>
+    <div id="google-btn-container" class="google-btn-container"></div>
+    <p id="google-status" class="status" role="status"></p>
+
     <p class="auth-alt">¿No tienes cuenta? <a href="/register">Regístrate</a></p>
   </section>
 </Layout>
 
 <script>
-  document.getElementById('login-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const status = document.getElementById('status');
+  const loginForm = document.getElementById('login-form');
+  const status = document.getElementById('status');
+
+  loginForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!status || !(event.currentTarget instanceof HTMLFormElement)) return;
     status.textContent = '';
     status.classList.remove('error');
 
-    const data = Object.fromEntries(new FormData(e.currentTarget));
+    const data = Object.fromEntries(new FormData(event.currentTarget));
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
@@ -42,9 +51,65 @@ import Layout from '../layouts/Layout.astro';
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || 'Error al iniciar sesión.');
       location.href = '/historial';
-    } catch (err) {
-      status.textContent = err.message;
+    } catch (error) {
+      status.textContent = error instanceof Error ? error.message : 'Error al iniciar sesión.';
       status.classList.add('error');
     }
   });
+</script>
+
+<script is:inline define:vars={{ clientId: GOOGLE_CLIENT_ID }}>
+  const googleContainer = document.getElementById('google-btn-container');
+  const googleStatus = document.getElementById('google-status');
+  if (!googleContainer || !googleStatus) throw new Error('Controles de Google no encontrados.');
+
+  function setGoogleError(message) {
+    googleStatus.textContent = message;
+    googleStatus.classList.add('error');
+  }
+
+  async function handleCredentialResponse(response) {
+    googleStatus.textContent = 'Validando cuenta…';
+    googleStatus.classList.remove('error');
+    try {
+      const result = await fetch('/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ credential: response.credential })
+      });
+      const body = await result.json().catch(() => ({}));
+      if (!result.ok) throw new Error(body.error || 'No se pudo iniciar sesión con Google.');
+      location.href = '/historial';
+    } catch (error) {
+      setGoogleError(error instanceof Error ? error.message : 'No se pudo iniciar sesión con Google.');
+    }
+  }
+
+  function initializeGoogle() {
+    if (!clientId) {
+      setGoogleError('El inicio de sesión con Google no está disponible ahora.');
+      return;
+    }
+    window.google.accounts.id.initialize({
+      client_id: clientId,
+      callback: handleCredentialResponse,
+      auto_select: false
+    });
+    window.google.accounts.id.renderButton(googleContainer, {
+      theme: 'outline', size: 'large', shape: 'rectangular', logo_alignment: 'left', width: 280
+    });
+  }
+
+  if (clientId) {
+    const googleScript = document.createElement('script');
+    googleScript.src = 'https://accounts.google.com/gsi/client';
+    googleScript.async = true;
+    googleScript.defer = true;
+    googleScript.onload = initializeGoogle;
+    googleScript.onerror = () => setGoogleError('No se pudo cargar el inicio de sesión con Google.');
+    document.head.appendChild(googleScript);
+  } else {
+    initializeGoogle();
+  }
 </script>

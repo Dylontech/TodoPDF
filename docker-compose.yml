@@ -12,8 +12,8 @@ services:
     environment:
       MARIADB_DATABASE: ${TODOPDF_DB_NAME:-todopdf}
       MARIADB_USER: ${TODOPDF_DB_USER:-todopdf}
-      MARIADB_PASSWORD: ${TODOPDF_DB_PASSWORD:-todopdf_secret_password}
-      MARIADB_ROOT_PASSWORD: ${TODOPDF_DB_ROOT_PASSWORD:-todopdf_root_secret}
+      MARIADB_PASSWORD: ${TODOPDF_DB_PASSWORD:?Define TODOPDF_DB_PASSWORD en .env}
+      MARIADB_ROOT_PASSWORD: ${TODOPDF_DB_ROOT_PASSWORD:?Define TODOPDF_DB_ROOT_PASSWORD en .env}
     volumes:
       - db_data:/var/lib/mysql
     healthcheck:
@@ -34,15 +34,20 @@ services:
     environment:
       TODOPDF_NODE_ENV: ${TODOPDF_NODE_ENV:-production}
       TODOPDF_PORT: ${TODOPDF_PORT:-3000}
-      # Secreto de sesión: usa el de .env o un valor por defecto de desarrollo
-      TODOPDF_SESSION_SECRET: ${TODOPDF_SESSION_SECRET:-dev-only-change-me-please}
-      TODOPDF_CORS_ORIGIN: ${TODOPDF_CORS_ORIGIN:-http://localhost:8080}
+      # Secreto de sesión: obligatorio para evitar sesiones falsificables.
+      TODOPDF_SESSION_SECRET: ${TODOPDF_SESSION_SECRET:?Define TODOPDF_SESSION_SECRET en .env}
+      TODOPDF_CORS_ORIGIN: ${TODOPDF_CORS_ORIGIN:?Define TODOPDF_CORS_ORIGIN en .env}
+      TODOPDF_COOKIE_SECURE: ${TODOPDF_COOKIE_SECURE:-true}
+      TODOPDF_GOOGLE_CLIENT_ID: ${PUBLIC_GOOGLE_CLIENT_ID:-}
+      TODOPDF_SITE_URL: ${PUBLIC_SITE_URL:-http://localhost:4321}
+      TODOPDF_ADMIN_EMAILS: ${TODOPDF_ADMIN_EMAILS:-}
+      TODOPDF_RETENTION_DAYS: ${TODOPDF_RETENTION_DAYS:-14}
       # Base de datos (host = nombre del servicio)
       TODOPDF_DB_HOST: db
       TODOPDF_DB_PORT: ${TODOPDF_DB_PORT:-3306}
       TODOPDF_DB_NAME: ${TODOPDF_DB_NAME:-todopdf}
       TODOPDF_DB_USER: ${TODOPDF_DB_USER:-todopdf}
-      TODOPDF_DB_PASSWORD: ${TODOPDF_DB_PASSWORD:-todopdf_secret_password}
+      TODOPDF_DB_PASSWORD: ${TODOPDF_DB_PASSWORD:?Define TODOPDF_DB_PASSWORD en .env}
       # Límites de subida
       TODOPDF_MAX_UPLOAD_GUEST: ${TODOPDF_MAX_UPLOAD_GUEST:-26214400}
       TODOPDF_MAX_UPLOAD_AUTH: ${TODOPDF_MAX_UPLOAD_AUTH:-104857600}
@@ -108,10 +113,36 @@ services:
     # Protección básica de RAM (rembg + LibreOffice necesitan margen)
     mem_limit: ${TODOPDF_BACKEND_MEM_LIMIT:-3g}
 
+  cleanup:
+    build:
+      context: ./backend
+      network: host
+    restart: unless-stopped
+    command: npm run cleanup
+    environment:
+      TODOPDF_NODE_ENV: ${TODOPDF_NODE_ENV:-production}
+      TODOPDF_DB_HOST: db
+      TODOPDF_DB_PORT: ${TODOPDF_DB_PORT:-3306}
+      TODOPDF_DB_NAME: ${TODOPDF_DB_NAME:-todopdf}
+      TODOPDF_DB_USER: ${TODOPDF_DB_USER:-todopdf}
+      TODOPDF_DB_PASSWORD: ${TODOPDF_DB_PASSWORD:?Define TODOPDF_DB_PASSWORD en .env}
+      TODOPDF_RETENTION_DAYS: ${TODOPDF_RETENTION_DAYS:-14}
+      TODOPDF_RETENTION_INTERVAL_MS: ${TODOPDF_RETENTION_INTERVAL_MS:-3600000}
+      TODOPDF_STORAGE_DIR: /data/storage
+      TODOPDF_TEMP_DIR: /data/tmp
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - uploads:/data
+
   # ── Frontend (Astro + nginx) ───────────────────────────────
   frontend:
     build:
       context: ./frontend
+      args:
+        PUBLIC_GOOGLE_CLIENT_ID: ${PUBLIC_GOOGLE_CLIENT_ID:-}
+        PUBLIC_SITE_URL: ${PUBLIC_SITE_URL:-http://localhost:4321}
       # Red del host durante el build (mismo motivo que el backend).
       network: host
     restart: unless-stopped

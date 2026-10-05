@@ -17,13 +17,18 @@
 
     <div id="nav-menu" class="nav-menu">
       <nav class="nav-links">
-        <a href="/pdf-a-jpg">PDF → Imágenes</a>
-        <a href="/imagenes-a-pdf">Imágenes → PDF</a>
-        <a href="/reescalar-imagen">Reescalar imagen</a>
-        <a href="/pdf-a-office">PDF → Office</a>
-        <a href="/office-a-pdf">Office → PDF</a>
         <details class="nav-dropdown">
-          <summary>Herramientas PDF <span class="caret">▾</span></summary>
+          <summary>Herramientas <span class="caret">▾</span></summary>
+          <div class="dropdown-menu">
+            <a href="/pdf-a-jpg">PDF → Imágenes</a>
+            <a href="/imagenes-a-pdf">Imágenes → PDF</a>
+            <a href="/pdf-a-office">PDF → Office</a>
+            <a href="/office-a-pdf">Office → PDF</a>
+            <a href="/reescalar-imagen">Reescalar imagen</a>
+          </div>
+        </details>
+        <details class="nav-dropdown">
+          <summary>PDF <span class="caret">▾</span></summary>
           <div class="dropdown-menu">
             <a href="/dividir-pdf">Dividir PDF</a>
             <a href="/extraer-paginas">Extraer páginas</a>
@@ -35,6 +40,7 @@
             <a href="/comprimir-pdf">Comprimir PDF</a>
           </div>
         </details>
+        <a href="/flashcards" class="nav-feature">Flashcards</a>
       </nav>
       <div id="nav-auth" class="nav-auth">
         <a href="/login">Iniciar sesión</a>
@@ -64,11 +70,11 @@
         // (incluido cerrar sesión) se agrupa en «Mi cuenta» para que la barra
         // no se sature ni colapse antes de tiempo en ventanas estrechas.
         el.innerHTML = `
-          <a href="/flashcards" class="nav-cta">Flashcards</a>
           <details class="nav-dropdown align-right">
             <summary>Mi cuenta <span class="caret">▾</span></summary>
             <div class="dropdown-menu">
               <a href="/historial">Historial</a>
+              ${data.user.role === 'admin' ? '<a href="/admin">Administración</a>' : ''}
               <a href="/convertir-documento">Convertir documento</a>
               <a href="/descargar-videos">Descargar vídeos</a>
               <a href="/quitar-fondo">Quitar fondo</a>

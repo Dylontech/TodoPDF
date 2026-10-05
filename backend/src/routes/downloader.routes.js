@@ -6,7 +6,8 @@ const {
   getInfo,
   download,
   getHistory,
-  downloadFile
+  downloadFile,
+  deleteHistoryItem
 } = require('../controllers/downloaderController');
 
 const router = Router();
@@ -25,5 +26,6 @@ router.get('/downloader/history', getHistory);
 
 // Descarga del archivo guardado (solo el dueño)
 router.get('/downloader/:id/download', downloadFile);
+router.delete('/downloader/history/:id', deleteHistoryItem);
 
 module.exports = router;

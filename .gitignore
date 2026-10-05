@@ -3,7 +3,10 @@ node_modules/
 
 # Entorno y secretos
 .env
-.env.local
+.env.*
+!.env.example
+!**/.env.example
+client_secret*.json
 
 # Entorno Python local (rembg para quitar fondo de imagen)
 backend/.venv/

@@ -16,6 +16,10 @@ RUN npm install --no-audit --no-fund \
     --fetch-retries=5 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=120000
 
 COPY . .
+ARG PUBLIC_GOOGLE_CLIENT_ID
+ARG PUBLIC_SITE_URL=http://localhost:4321
+ENV PUBLIC_GOOGLE_CLIENT_ID=$PUBLIC_GOOGLE_CLIENT_ID
+ENV PUBLIC_SITE_URL=$PUBLIC_SITE_URL
 RUN npm run build
 
 # Etapa 2: servidor estático con proxy de API
