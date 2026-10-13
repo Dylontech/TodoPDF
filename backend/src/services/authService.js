@@ -4,6 +4,7 @@ const bcrypt = require('bcrypt');
 const crypto = require('node:crypto');
 const db = require('../config/db');
 const config = require('../config');
+const { httpError } = require('../utils/errors');
 
 /**
  * Servicio de autenticación: registro y login con bcrypt.
@@ -11,6 +12,13 @@ const config = require('../config');
  */
 
 const SALT_ROUNDS = 10;
+
+/** Lanza 403 si la cuenta está suspendida por moderación. */
+function assertNotBanned(user) {
+  if (user.status === 'banned') {
+    throw httpError(403, 'Cuenta suspendida.' + (user.banned_reason ? ` Motivo: ${user.banned_reason}` : ''));
+  }
+}
 
 /**
  * Registra un nuevo usuario.
@@ -39,6 +47,8 @@ async function login(email, password) {
   const ok = await bcrypt.compare(password, user.password_hash);
   if (!ok) return null;
 
+  assertNotBanned(user);
+
   return { id: user.id, email: user.email, role: user.role || 'user' };
 }
 
@@ -48,6 +58,7 @@ async function loginWithGoogle(email, googleSub) {
   const linked = await db('users').where({ google_sub: googleSub }).first();
   if (linked) {
     if (linked.email !== normalized) throw new Error('La identidad de Google ya está vinculada a otra cuenta.');
+    assertNotBanned(linked);
     return { id: linked.id, email: linked.email, role: linked.role || 'user' };
   }
 
@@ -56,6 +67,7 @@ async function loginWithGoogle(email, googleSub) {
     if (existing.google_sub && existing.google_sub !== googleSub) {
       throw new Error('El email ya está vinculado a otra identidad de Google.');
     }
+    assertNotBanned(existing);
     await db('users').where({ id: existing.id }).update({ google_sub: googleSub });
     return { id: existing.id, email: existing.email, role: existing.role || 'user' };
   }
@@ -79,6 +91,7 @@ async function loginWithGoogle(email, googleSub) {
     if (concurrent.email !== normalized || (concurrent.google_sub && concurrent.google_sub !== googleSub)) {
       throw new Error('La identidad de Google ya está vinculada a otra cuenta.');
     }
+    assertNotBanned(concurrent);
     if (!concurrent.google_sub) {
       await db('users').where({ id: concurrent.id }).update({ google_sub: googleSub });
     }

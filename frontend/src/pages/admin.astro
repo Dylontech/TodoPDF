@@ -22,12 +22,28 @@ import Layout from '../layouts/Layout.astro';
       </div>
     </div>
   </div>
+  <div id="ban-modal" class="modal-overlay" hidden>
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="ban-title">
+      <h2 id="ban-title">Suspender cuenta</h2>
+      <p>El usuario no podrá iniciar sesión hasta que un administrador reactive su cuenta.</p>
+      <label class="field" for="ban-reason">Motivo (opcional, visible para el usuario)
+        <textarea id="ban-reason" maxlength="1000" rows="3" placeholder="Motivo de la suspensión"></textarea>
+      </label>
+      <div class="modal-actions">
+        <button id="ban-cancel" class="btn-outline" type="button">Cancelar</button>
+        <button id="ban-confirm" class="btn-danger" type="button">Suspender</button>
+      </div>
+    </div>
+  </div>
 </Layout>
 
 <script>
-  type User = { id: number; email: string; role: string; history_count: number; created_at: string };
+  type BaseUser = { id: number; email: string; role: string; status: string; banned_reason?: string | null };
+  type User = BaseUser & { history_count: number; created_at: string };
   type HistoryItem = { id: number; table: string; kind: string; name: string; type?: string; ext?: string; size: number; created_at: string };
   let selectedUser = 0;
+  let currentAdminId = 0;
+  let banTargetId = 0;
   let pending: { table: string; id: number; row: HTMLTableRowElement } | null = null;
 
   async function main() {
@@ -37,6 +53,7 @@ import Layout from '../layouts/Layout.astro';
     const me = await fetch('/api/auth/me', { credentials: 'include' }).then((response) => response.json()).catch(() => null);
     if (!me?.user) { location.href = '/login'; return; }
     if (me.user.role !== 'admin') { status.textContent = 'No tienes permisos de administrador.'; status.classList.add('error'); return; }
+    currentAdminId = me.user.id;
     const response = await fetch('/api/admin/users', { credentials: 'include' });
     if (!response.ok) { status.textContent = 'No se pudo cargar la administración.'; status.classList.add('error'); return; }
     const data = await response.json();
@@ -48,9 +65,11 @@ import Layout from '../layouts/Layout.astro';
   function renderUsers(users: User[]) {
     const box = document.getElementById('users');
     if (!box) return;
-    box.innerHTML = `<div class="admin-user-list">${users.map((user) => `<button class="admin-user" type="button" data-user-id="${user.id}"><strong>${escapeHtml(user.email)}</strong><span>${user.role} · ${user.history_count} archivos</span></button>`).join('')}</div>`;
+    box.innerHTML = `<div class="admin-user-list">${users.map((user) => `<button class="admin-user${user.status === 'banned' ? ' admin-user-banned' : ''}" type="button" data-user-id="${user.id}"><strong>${escapeHtml(user.email)}${user.status === 'banned' ? ' <span class="badge-banned">Suspendida</span>' : ''}</strong><span>${user.role} · ${user.history_count} archivos</span></button>`).join('')}</div>`;
     box.querySelectorAll<HTMLButtonElement>('.admin-user').forEach((button) => button.addEventListener('click', () => loadHistory(Number(button.dataset.userId))));
-    if (users[0]) loadHistory(users[0].id);
+    const current = users.find((user) => user.id === selectedUser);
+    if (current) loadHistory(current.id);
+    else if (users[0]) loadHistory(users[0].id);
   }
 
   async function loadHistory(userId: number) {
@@ -61,10 +80,69 @@ import Layout from '../layouts/Layout.astro';
     const response = await fetch(`/api/admin/users/${userId}/history`, { credentials: 'include' });
     if (!response.ok) { box.innerHTML = '<p class="status error">No se pudo cargar el historial.</p>'; return; }
     const data = await response.json();
-    if (!data.history.length) { box.innerHTML = `<h2>${escapeHtml(data.user.email)}</h2><p class="status">Este usuario no tiene archivos guardados.</p>`; return; }
-    box.innerHTML = `<h2>${escapeHtml(data.user.email)}</h2><table class="history-table"><thead><tr><th>Tipo</th><th>Nombre</th><th>Tamaño</th><th>Fecha</th><th></th></tr></thead><tbody>${data.history.map((item: HistoryItem) => `<tr><td>${item.kind === 'download' ? `Descarga (${escapeHtml(item.ext || '')})` : escapeHtml(item.type || 'Conversión')}</td><td class="truncate">${escapeHtml(item.name)}</td><td>${formatSize(item.size)}</td><td>${new Date(item.created_at).toLocaleString('es')}</td><td><button class="btn-delete admin-delete" type="button" data-table="${item.table}" data-id="${item.id}">Eliminar</button></td></tr>`).join('')}</tbody></table>`;
-    box.querySelectorAll<HTMLButtonElement>('.admin-delete').forEach((button) => button.addEventListener('click', () => openDelete(button)));
+    const heading = renderHeading(data.user);
+    if (!data.history.length) {
+      box.innerHTML = `${heading}<p class="status">Este usuario no tiene archivos guardados.</p>`;
+    } else {
+      box.innerHTML = `${heading}<table class="history-table"><thead><tr><th>Tipo</th><th>Nombre</th><th>Tamaño</th><th>Fecha</th><th></th></tr></thead><tbody>${data.history.map((item: HistoryItem) => `<tr><td>${item.kind === 'download' ? `Descarga (${escapeHtml(item.ext || '')})` : escapeHtml(item.type || 'Conversión')}</td><td class="truncate">${escapeHtml(item.name)}</td><td>${formatSize(item.size)}</td><td>${new Date(item.created_at).toLocaleString('es')}</td><td><button class="btn-delete admin-delete" type="button" data-table="${item.table}" data-id="${item.id}">Eliminar</button></td></tr>`).join('')}</tbody></table>`;
+      box.querySelectorAll<HTMLButtonElement>('.admin-delete').forEach((button) => button.addEventListener('click', () => openDelete(button)));
+    }
+    attachModerationActions(userId);
   }
+
+  function renderHeading(user: BaseUser): string {
+    const banned = user.status === 'banned';
+    const canModerate = user.role !== 'admin' && user.id !== currentAdminId;
+    const action = banned
+      ? (canModerate ? '<button id="unban-btn" class="btn-outline" type="button">Reactivar</button>' : '')
+      : (canModerate ? '<button id="ban-btn" class="btn-danger" type="button">Suspender</button>' : '');
+    const reason = banned && user.banned_reason ? `<p class="status error">Motivo: ${escapeHtml(user.banned_reason)}</p>` : '';
+    return `<div class="history-heading"><h2>${escapeHtml(user.email)}${banned ? ' <span class="badge-banned">Suspendida</span>' : ''}</h2><div class="history-actions">${action}</div></div>${reason}`;
+  }
+
+  function attachModerationActions(userId: number) {
+    document.getElementById('ban-btn')?.addEventListener('click', () => openBanModal(userId));
+    document.getElementById('unban-btn')?.addEventListener('click', () => unbanUser(userId));
+  }
+
+  async function refreshUsers() {
+    const response = await fetch('/api/admin/users', { credentials: 'include' });
+    if (!response.ok) { showError('No se pudo actualizar la lista de usuarios.'); return; }
+    const data = await response.json();
+    renderUsers(data.users);
+  }
+
+  function openBanModal(userId: number) {
+    banTargetId = userId;
+    const modal = document.getElementById('ban-modal');
+    const reason = document.getElementById('ban-reason') as HTMLTextAreaElement | null;
+    if (reason) reason.value = '';
+    if (modal) modal.hidden = false;
+    reason?.focus();
+  }
+
+  function closeBanModal() { const modal = document.getElementById('ban-modal'); if (modal) modal.hidden = true; banTargetId = 0; }
+
+  async function unbanUser(userId: number) {
+    const response = await fetch(`/api/admin/users/${userId}/unban`, { method: 'POST', credentials: 'include' });
+    if (response.ok) { await refreshUsers(); } else { showError('No se pudo reactivar la cuenta.'); }
+  }
+
+  document.getElementById('ban-cancel')?.addEventListener('click', () => closeBanModal());
+  document.getElementById('ban-confirm')?.addEventListener('click', async () => {
+    if (!banTargetId) return;
+    const button = document.getElementById('ban-confirm') as HTMLButtonElement;
+    const reason = document.getElementById('ban-reason') as HTMLTextAreaElement | null;
+    button.disabled = true;
+    const response = await fetch(`/api/admin/users/${banTargetId}/ban`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ reason: reason?.value || '' })
+    });
+    button.disabled = false;
+    if (response.ok) { closeBanModal(); await refreshUsers(); } else { showError('No se pudo suspender la cuenta.'); }
+  });
 
   function openDelete(button: HTMLButtonElement) {
     const row = button.closest('tr');

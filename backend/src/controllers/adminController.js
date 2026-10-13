@@ -6,7 +6,7 @@ const lifecycle = require('../services/historyLifecycleService');
 async function listUsers(req, res, next) {
   try {
     const users = await db('users')
-      .select('id', 'email', 'role', 'created_at')
+      .select('id', 'email', 'role', 'status', 'banned_reason', 'banned_at', 'created_at')
       .orderBy('created_at', 'desc');
     const [conversionCounts, downloadCounts] = await Promise.all([
       db('conversions').select('user_id').count({ count: '*' }).groupBy('user_id'),
@@ -26,7 +26,7 @@ async function getUserHistory(req, res, next) {
   try {
     const userId = Number(req.params.userId);
     if (!Number.isInteger(userId) || userId < 1) return res.status(400).json({ error: 'Usuario inválido.' });
-    const user = await db('users').where({ id: userId }).select('id', 'email', 'role').first();
+    const user = await db('users').where({ id: userId }).select('id', 'email', 'role', 'status', 'banned_reason').first();
     if (!user) return res.status(404).json({ error: 'Usuario no encontrado.' });
     const [conversions, downloads] = await Promise.all([
       db('conversions').where({ user_id: userId }).select('id', 'type', 'input_filename as name', 'size', 'created_at'),
@@ -67,4 +67,68 @@ async function deleteUserHistory(req, res, next) {
   }
 }
 
-module.exports = { listUsers, getUserHistory, deleteHistory, deleteUserHistory };
+/** POST /api/admin/users/:userId/ban — suspende una cuenta. */
+async function banUser(req, res, next) {
+  try {
+    const userId = Number(req.params.userId);
+    if (!Number.isInteger(userId) || userId < 1) return res.status(400).json({ error: 'Usuario inválido.' });
+    const reason = String((req.body || {}).reason || '').trim().slice(0, 1000);
+
+    const user = await db('users').where({ id: userId }).first();
+    if (!user) return res.status(404).json({ error: 'Usuario no encontrado.' });
+    if (user.role === 'admin' || userId === req.user.id) {
+      return res.status(400).json({ error: 'No puedes suspender cuentas de administrador.' });
+    }
+    if (user.status === 'banned') {
+      return res.status(400).json({ error: 'La cuenta ya está suspendida.' });
+    }
+
+    await db('users').where({ id: userId }).update({
+      status: 'banned',
+      banned_at: db.fn.now(),
+      banned_reason: reason || null,
+      banned_by: req.user.id
+    });
+    await db('moderation_logs').insert({
+      user_id: userId,
+      admin_id: req.user.id,
+      action: 'ban',
+      reason: reason || null
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/** POST /api/admin/users/:userId/unban — reactiva una cuenta suspendida. */
+async function unbanUser(req, res, next) {
+  try {
+    const userId = Number(req.params.userId);
+    if (!Number.isInteger(userId) || userId < 1) return res.status(400).json({ error: 'Usuario inválido.' });
+
+    const user = await db('users').where({ id: userId }).first();
+    if (!user) return res.status(404).json({ error: 'Usuario no encontrado.' });
+    if (user.status !== 'banned') {
+      return res.status(400).json({ error: 'La cuenta no está suspendida.' });
+    }
+
+    await db('users').where({ id: userId }).update({
+      status: 'active',
+      banned_at: null,
+      banned_reason: null,
+      banned_by: null
+    });
+    await db('moderation_logs').insert({
+      user_id: userId,
+      admin_id: req.user.id,
+      action: 'unban',
+      reason: null
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { listUsers, getUserHistory, deleteHistory, deleteUserHistory, banUser, unbanUser };

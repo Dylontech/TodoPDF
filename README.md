@@ -166,12 +166,24 @@ Sección **exclusiva para cuentas con sesión iniciada** para crear tarjetas de 
 ### Inicio de sesión con Google
 
 El login admite Google Identity Services. Crea un cliente OAuth de tipo **Aplicación web** en Google
-Cloud Console y añade el origen público de la aplicación en los orígenes autorizados. Después define
-el mismo Client ID en el entorno del despliegue:
+Cloud Console y añade a **Orígenes JavaScript autorizados** el origen público y el de desarrollo
+local. Después define el mismo Client ID en el entorno del despliegue:
 
 ```dotenv
 PUBLIC_GOOGLE_CLIENT_ID=1234567890-abc.apps.googleusercontent.com
 ```
+
+```
+https://todopdf.dylontech.com   # producción
+http://localhost:4321           # desarrollo local (npm run dev)
+```
+
+Si falta el origen desde el que se abre la página, Google responde **403** y la consola muestra
+`[GSI_LOGGER]: The given origin is not allowed for the given client ID`; el botón se dibuja pero no
+permite iniciar sesión. Es un ajuste del cliente OAuth (Google Cloud), no del código.
+
+El *client secret* no lo usa este flujo: se valida el ID token de Google con el Client ID como
+audiencia (`google-auth-library`), sin intercambio de código en el servidor.
 
 `PUBLIC_GOOGLE_CLIENT_ID` se incorpora al build del frontend y también configura la audiencia que el
 backend valida (`TODOPDF_GOOGLE_CLIENT_ID`). En local, reinicia Astro después de cambiarlo; con Docker,

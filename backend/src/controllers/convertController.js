@@ -282,10 +282,18 @@ async function download(req, res, next) {
     if (!stat) throw httpError(404, 'El archivo ya no existe en el servidor.');
 
     if (stat.isDirectory()) {
-      // PDF → imágenes: el directorio contiene las páginas → ZIP
+      // Resultado en carpeta (páginas de PDF o piezas de imagen) → ZIP. Se
+      // ordenan las entradas por nombre (los ficheros van numerados) porque
+      // archive.directory() las añadía en el orden del sistema de archivos.
+      const entries = (await fs.readdir(row.output_path, { withFileTypes: true }))
+        .filter((entry) => entry.isFile())
+        .map((entry) => entry.name)
+        .sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
       const archive = archiver('zip', { zlib: { level: 6 } });
       archive.on('error', (err) => res.destroy(err));
-      archive.directory(row.output_path, false);
+      for (const name of entries) {
+        archive.file(path.join(row.output_path, name), { name });
+      }
       res.setHeader('Content-Type', 'application/zip');
       res.setHeader('Content-Disposition', `attachment; filename="conversion-${row.id}.zip"`);
       archive.pipe(res);

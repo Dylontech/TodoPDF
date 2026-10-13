@@ -20,6 +20,7 @@ const PRIVATE_PATHS = new Set([
   '/quitar-fondo',
   '/imagen-a-vectorial',
   '/quitar-objetos',
+  '/subdividir-imagen',
   '/flashcards',
   // Visor de un mazo compartido: solo tiene sentido con un token en la URL
   '/flashcard'

@@ -19,6 +19,7 @@ const removeBgRoutes = require('./routes/removeBg.routes');
 const vectorizeRoutes = require('./routes/vectorize.routes');
 const inpaintRoutes = require('./routes/inpaint.routes');
 const upscaleRoutes = require('./routes/upscale.routes');
+const splitImageRoutes = require('./routes/splitImage.routes');
 const flashcardsRoutes = require('./routes/flashcards.routes');
 const flashcardLibraryRoutes = require('./routes/flashcardLibrary.routes');
 const flashcardShareRoutes = require('./routes/flashcardShare.routes');
@@ -119,6 +120,14 @@ const upscaleLimiter = rateLimit({
   message: { error: 'Demasiadas peticiones de reescalado. Inténtalo más tarde.' }
 });
 
+const splitImageLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiadas peticiones de subdivisión de imágenes. Inténtalo más tarde.' }
+});
+
 // Flashcards: crear/editar mazos y exportar (el usuario ya está autenticado)
 const flashcardsLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -171,6 +180,7 @@ app.use('/api', uploadLimiter, pdfToolsRoutes);
 // que aplican router.use(requireAuth) sin path y por tanto capturarían
 // /upscale con un 401 para invitados aunque la ruta no fuera suya.
 app.use('/api', upscaleLimiter, upscaleRoutes);
+app.use('/api', splitImageLimiter, splitImageRoutes);
 app.use('/api', downloaderLimiter, downloaderRoutes);
 app.use('/api', removeBgLimiter, removeBgRoutes);
 app.use('/api', vectorizeLimiter, vectorizeRoutes);

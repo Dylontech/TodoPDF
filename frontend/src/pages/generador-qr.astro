@@ -1,0 +1,1224 @@
+---
+import Layout from '../layouts/Layout.astro';
+
+// Formas de puntos que acepta la librería de estilizado (qr-code-styling).
+const dotShapes = [
+  { value: 'square', label: 'Cuadrado' },
+  { value: 'rounded', label: 'Redondeado' },
+  { value: 'dots', label: 'Puntos' },
+  { value: 'classy', label: 'Elegante' },
+  { value: 'classy-rounded', label: 'Elegante redondeado' },
+  { value: 'extra-rounded', label: 'Muy redondeado' }
+];
+
+const cornerShapes = [
+  { value: 'square', label: 'Cuadrado' },
+  { value: 'extra-rounded', label: 'Redondeado' },
+  { value: 'dot', label: 'Circular' }
+];
+
+const cornerDotShapes = [
+  { value: 'square', label: 'Cuadrado' },
+  { value: 'dot', label: 'Circular' }
+];
+
+const sizes = [300, 500, 800, 1200, 2000];
+
+const levels = [
+  { value: 'L', label: 'L — 7 % de recuperación' },
+  { value: 'M', label: 'M — 15 % (equilibrado)' },
+  { value: 'Q', label: 'Q — 25 % (recomendado con logo)' },
+  { value: 'H', label: 'H — 30 % (máxima resistencia)' }
+];
+---
+
+<Layout title="Generador de códigos QR">
+  <section class="tool qr-tool">
+    <h1>🔳 Generador de códigos QR</h1>
+    <p>
+      Crea códigos QR con la forma, los colores y el <strong>logo central</strong>
+      que quieras, y descárgalos en PNG, SVG, JPG o WebP. Todo se genera
+      <strong>en tu navegador</strong>: tu contenido y tu logo no se envían a
+      ningún servidor.
+    </p>
+
+    <form id="qr-form" class="qr-layout" autocomplete="off">
+      <div class="qr-panel">
+        <!-- ── Contenido ─────────────────────────────────── -->
+        <section class="qr-group">
+          <h2 class="qr-group-title">Contenido</h2>
+
+          <div class="qr-tabs" id="qr-tabs">
+            <button type="button" class="qr-tab active" data-mode="text" aria-pressed="true">Texto o URL</button>
+            <button type="button" class="qr-tab" data-mode="wifi" aria-pressed="false">WiFi</button>
+            <button type="button" class="qr-tab" data-mode="contact" aria-pressed="false">Contacto</button>
+            <button type="button" class="qr-tab" data-mode="email" aria-pressed="false">Email</button>
+          </div>
+
+          <div class="qr-pane" data-pane="text">
+            <label class="field">
+              <span>Texto o enlace</span>
+              <textarea id="qr-text" rows="3" maxlength="1200" placeholder="https://todopdf.dylontech.com">https://todopdf.dylontech.com</textarea>
+            </label>
+          </div>
+
+          <div class="qr-pane" data-pane="wifi" hidden>
+            <div class="qr-grid2">
+              <label class="field">
+                <span>Nombre de la red (SSID)</span>
+                <input id="wifi-ssid" type="text" maxlength="64" placeholder="MiWiFi" />
+              </label>
+              <label class="field">
+                <span>Contraseña</span>
+                <input id="wifi-pass" type="text" maxlength="64" placeholder="Contraseña de la red" />
+              </label>
+              <label class="field">
+                <span>Seguridad</span>
+                <select id="wifi-enc">
+                  <option value="WPA">WPA / WPA2 / WPA3</option>
+                  <option value="WEP">WEP</option>
+                  <option value="nopass">Sin contraseña</option>
+                </select>
+              </label>
+              <label class="qr-check">
+                <input id="wifi-hidden" type="checkbox" />
+                <span>La red está oculta</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="qr-pane" data-pane="contact" hidden>
+            <div class="qr-grid2">
+              <label class="field">
+                <span>Nombre</span>
+                <input id="contact-first" type="text" maxlength="80" placeholder="Ana" />
+              </label>
+              <label class="field">
+                <span>Apellidos</span>
+                <input id="contact-last" type="text" maxlength="80" placeholder="García" />
+              </label>
+              <label class="field">
+                <span>Teléfono</span>
+                <input id="contact-phone" type="tel" maxlength="40" placeholder="+34 600 000 000" />
+              </label>
+              <label class="field">
+                <span>Email</span>
+                <input id="contact-email" type="email" maxlength="120" placeholder="ana@ejemplo.com" />
+              </label>
+              <label class="field">
+                <span>Empresa</span>
+                <input id="contact-org" type="text" maxlength="80" placeholder="Dylontech" />
+              </label>
+              <label class="field">
+                <span>Web</span>
+                <input id="contact-url" type="url" maxlength="200" placeholder="https://ejemplo.com" />
+              </label>
+            </div>
+          </div>
+
+          <div class="qr-pane" data-pane="email" hidden>
+            <div class="qr-grid2">
+              <label class="field">
+                <span>Destinatario</span>
+                <input id="email-to" type="email" maxlength="120" placeholder="hola@ejemplo.com" />
+              </label>
+              <label class="field">
+                <span>Asunto</span>
+                <input id="email-subject" type="text" maxlength="120" placeholder="Presupuesto" />
+              </label>
+            </div>
+            <label class="field">
+              <span>Mensaje</span>
+              <textarea id="email-body" rows="2" maxlength="600" placeholder="Hola, quería pedirte…"></textarea>
+            </label>
+          </div>
+        </section>
+
+        <!-- ── Estilos rápidos ───────────────────────────── -->
+        <section class="qr-group">
+          <h2 class="qr-group-title">Estilos rápidos</h2>
+          <div class="qr-presets" id="qr-presets">
+            <button type="button" class="qr-preset" data-preset="clasico">Clásico</button>
+            <button type="button" class="qr-preset" data-preset="redondeado">Redondeado</button>
+            <button type="button" class="qr-preset" data-preset="puntos">Puntos</button>
+            <button type="button" class="qr-preset" data-preset="neon">Neón</button>
+            <button type="button" class="qr-preset" data-preset="atardecer">Atardecer</button>
+            <button type="button" class="qr-preset" data-preset="oceano">Océano</button>
+            <button type="button" class="qr-preset" data-preset="bosque">Bosque</button>
+            <button type="button" class="qr-preset" data-preset="elegante">Elegante</button>
+            <button type="button" class="qr-preset" data-preset="oscuro">Oscuro</button>
+            <button type="button" class="qr-preset" data-preset="sin-fondo">Sin fondo</button>
+          </div>
+        </section>
+
+        <!-- ── Puntos y esquinas ─────────────────────────── -->
+        <section class="qr-group">
+          <h2 class="qr-group-title">Puntos y esquinas</h2>
+          <div class="qr-grid2">
+            <label class="field">
+              <span>Forma de los puntos</span>
+              <select id="dots-shape">
+                {dotShapes.map((shape) => (
+                  <option value={shape.value} selected={shape.value === 'square'}>{shape.label}</option>
+                ))}
+              </select>
+            </label>
+            <div class="field">
+              <span>Color de los puntos</span>
+              <div class="qr-color">
+                <input type="color" id="dots-color-input" value="#0f172a" aria-label="Color de los puntos" />
+                <input type="text" id="dots-color" class="hex" value="#0F172A" spellcheck="false" maxlength="7" aria-label="Color de los puntos en hexadecimal" />
+              </div>
+            </div>
+          </div>
+
+          <label class="qr-check">
+            <input id="dots-gradient" type="checkbox" />
+            <span>Usar un degradado en los puntos</span>
+          </label>
+          <div class="qr-sub" id="dots-gradient-fields" hidden>
+            <div class="qr-grid2">
+              <div class="field">
+                <span>Segundo color</span>
+                <div class="qr-color">
+                  <input type="color" id="dots-color-2-input" value="#2563eb" aria-label="Segundo color del degradado" />
+                  <input type="text" id="dots-color-2" class="hex" value="#2563EB" spellcheck="false" maxlength="7" aria-label="Segundo color en hexadecimal" />
+                </div>
+              </div>
+              <label class="field">
+                <span>Tipo de degradado</span>
+                <select id="dots-gradient-type">
+                  <option value="linear">Lineal</option>
+                  <option value="radial">Radial</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Ángulo: <output id="dots-rot-out">45°</output></span>
+                <input type="range" id="dots-gradient-rotation" min="0" max="360" step="5" value="45" />
+              </label>
+            </div>
+          </div>
+
+          <div class="qr-grid2">
+            <label class="field">
+              <span>Forma de las esquinas</span>
+              <select id="corner-shape">
+                {cornerShapes.map((shape) => (
+                  <option value={shape.value} selected={shape.value === 'square'}>{shape.label}</option>
+                ))}
+              </select>
+            </label>
+            <div class="field">
+              <span>Color de las esquinas</span>
+              <div class="qr-color">
+                <input type="color" id="corner-color-input" value="#0f172a" aria-label="Color de las esquinas" />
+                <input type="text" id="corner-color" class="hex" value="#0F172A" spellcheck="false" maxlength="7" aria-label="Color de las esquinas en hexadecimal" />
+              </div>
+            </div>
+            <label class="field">
+              <span>Punto central de las esquinas</span>
+              <select id="corner-dot-shape">
+                {cornerDotShapes.map((shape) => (
+                  <option value={shape.value} selected={shape.value === 'square'}>{shape.label}</option>
+                ))}
+              </select>
+            </label>
+            <div class="field">
+              <span>Color del punto central</span>
+              <div class="qr-color">
+                <input type="color" id="corner-dot-color-input" value="#0f172a" aria-label="Color del punto central" />
+                <input type="text" id="corner-dot-color" class="hex" value="#0F172A" spellcheck="false" maxlength="7" aria-label="Color del punto central en hexadecimal" />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── Fondo ─────────────────────────────────────── -->
+        <section class="qr-group">
+          <h2 class="qr-group-title">Fondo</h2>
+          <div class="qr-grid2">
+            <div class="field">
+              <span>Color de fondo</span>
+              <div class="qr-color">
+                <input type="color" id="bg-color-input" value="#ffffff" aria-label="Color de fondo" />
+                <input type="text" id="bg-color" class="hex" value="#FFFFFF" spellcheck="false" maxlength="7" aria-label="Color de fondo en hexadecimal" />
+              </div>
+            </div>
+            <label class="field">
+              <span>Redondeo del fondo: <output id="bg-round-out">0%</output></span>
+              <input type="range" id="bg-round" min="0" max="100" step="5" value="0" />
+            </label>
+          </div>
+
+          <label class="qr-check">
+            <input id="bg-gradient" type="checkbox" />
+            <span>Usar un degradado en el fondo</span>
+          </label>
+          <div class="qr-sub" id="bg-gradient-fields" hidden>
+            <div class="qr-grid2">
+              <div class="field">
+                <span>Segundo color</span>
+                <div class="qr-color">
+                  <input type="color" id="bg-color-2-input" value="#eff6ff" aria-label="Segundo color del fondo" />
+                  <input type="text" id="bg-color-2" class="hex" value="#EFF6FF" spellcheck="false" maxlength="7" aria-label="Segundo color del fondo en hexadecimal" />
+                </div>
+              </div>
+              <label class="field">
+                <span>Tipo de degradado</span>
+                <select id="bg-gradient-type">
+                  <option value="linear">Lineal</option>
+                  <option value="radial">Radial</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Ángulo: <output id="bg-rot-out">45°</output></span>
+                <input type="range" id="bg-gradient-rotation" min="0" max="360" step="5" value="45" />
+              </label>
+            </div>
+          </div>
+
+          <label class="qr-check">
+            <input id="bg-transparent" type="checkbox" />
+            <span>Fondo transparente (PNG y SVG)</span>
+          </label>
+        </section>
+
+        <!-- ── Logo ──────────────────────────────────────── -->
+        <section class="qr-group">
+          <h2 class="qr-group-title">Logo central</h2>
+          <div class="qr-logo-row">
+            <label class="dropzone qr-logo-drop" for="logo-input">
+              <span id="logo-title">Haz clic para elegir un logo</span>
+              <small>PNG, JPG, WebP o SVG · máx. 2 MB</small>
+              <input
+                type="file"
+                id="logo-input"
+                accept="image/png,image/jpeg,image/webp,image/svg+xml,.png,.jpg,.jpeg,.webp,.svg"
+                hidden
+              />
+            </label>
+            <button type="button" id="logo-remove" class="btn-outline qr-logo-remove" hidden>Quitar logo</button>
+          </div>
+          <div class="qr-grid2">
+            <label class="field">
+              <span>Tamaño del logo: <output id="logo-size-out">40%</output></span>
+              <input type="range" id="logo-size" min="15" max="50" step="5" value="40" />
+            </label>
+            <label class="field">
+              <span>Margen del logo: <output id="logo-margin-out">8 px</output></span>
+              <input type="range" id="logo-margin" min="0" max="30" step="2" value="8" />
+            </label>
+          </div>
+          <label class="qr-check">
+            <input id="logo-hide-dots" type="checkbox" checked />
+            <span>Ocultar los puntos que quedan detrás del logo</span>
+          </label>
+          <p id="logo-hint" class="qr-hint" hidden>
+            Nivel de corrección ajustado a <strong>H</strong> para que el logo no
+            impida leer el código.
+          </p>
+        </section>
+
+        <!-- ── Tamaño y lectura ──────────────────────────── -->
+        <section class="qr-group">
+          <h2 class="qr-group-title">Tamaño y lectura</h2>
+          <div class="qr-grid2">
+            <label class="field">
+              <span>Resolución de descarga</span>
+              <select id="qr-size">
+                {sizes.map((size) => (
+                  <option value={String(size)} selected={size === 500}>{size} × {size} px</option>
+                ))}
+              </select>
+            </label>
+            <label class="field">
+              <span>Nivel de corrección de errores</span>
+              <select id="qr-level">
+                {levels.map((level) => (
+                  <option value={level.value} selected={level.value === 'M'}>{level.label}</option>
+                ))}
+              </select>
+            </label>
+            <label class="field">
+              <span>Margen: <output id="qr-margin-out">16 px</output></span>
+              <input type="range" id="qr-margin" min="0" max="60" step="2" value="16" />
+            </label>
+          </div>
+        </section>
+      </div>
+
+      <!-- ── Vista previa ────────────────────────────────── -->
+      <aside class="qr-side">
+        <div class="qr-preview-card">
+          <div id="qr-preview" class="qr-preview"></div>
+          <p id="qr-status" class="status" role="status"></p>
+        </div>
+
+        <div class="qr-actions">
+          <label class="field">
+            <span>Nombre del archivo</span>
+            <input id="file-name" type="text" value="codigo-qr" maxlength="60" spellcheck="false" />
+          </label>
+          <div class="qr-buttons">
+            <button type="button" class="btn-primary" data-ext="png">PNG</button>
+            <button type="button" class="btn-primary" data-ext="svg">SVG</button>
+            <button type="button" class="btn-primary" data-ext="jpeg">JPG</button>
+            <button type="button" class="btn-primary" data-ext="webp">WebP</button>
+          </div>
+          <div class="qr-buttons">
+            <button type="button" id="copy-image" class="btn-outline">Copiar imagen</button>
+            <button type="button" id="copy-content" class="btn-outline">Copiar contenido</button>
+          </div>
+        </div>
+      </aside>
+    </form>
+
+    <p class="privacy-note">
+      💡 El <strong>JPG</strong> no admite transparencia: si activas el fondo
+      transparente usa PNG, SVG o WebP. Cuanto más grande sea el logo, más
+      conviene subir el nivel de corrección a <strong>H</strong>. Comprueba
+      siempre el resultado con un lector real antes de imprimirlo.
+    </p>
+  </section>
+</Layout>
+
+<style>
+  .qr-tool { max-width: 100%; }
+
+  .qr-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+    gap: 1.5rem;
+    align-items: start;
+  }
+
+  .qr-panel { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
+
+  .qr-group {
+    background: var(--surface);
+    color: var(--text);
+    border: none;
+    border-radius: var(--radius);
+    padding: 1.1rem 1.25rem 1.25rem;
+    box-shadow: var(--shadow);
+    margin: 0;
+    min-width: 0;
+  }
+  /* El espaciado se hace con márgenes entre hijos (no con flex ni `gap`,
+     porque un `legend` de `fieldset` se dibuja a caballo del borde superior). */
+  .qr-group > * + * { margin-top: 0.9rem; }
+
+  /* Título del grupo: en flujo normal, siempre dentro de la tarjeta. */
+  .qr-group-title {
+    margin: 0;
+    font-size: 1.02rem;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .qr-grid2 {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.85rem;
+  }
+
+  /* Pestañas de tipo de contenido */
+  .qr-tabs { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+  .qr-tab {
+    border: 1px solid #cbd5e1;
+    background: #fff;
+    color: var(--muted);
+    border-radius: 999px;
+    padding: 0.35rem 0.85rem;
+    font: inherit;
+    font-size: 0.9rem;
+    cursor: pointer;
+  }
+  .qr-tab:hover { border-color: var(--primary); color: var(--primary); }
+  .qr-tab.active { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 600; }
+
+  .qr-pane { display: flex; flex-direction: column; gap: 0.75rem; }
+  /* Un `display: flex` propio gana al `display: none` que el navegador aplica
+     a [hidden]: hay que repetirlo para que ocultar siga funcionando. */
+  .qr-pane[hidden],
+  .qr-sub[hidden] { display: none; }
+
+  /* Pares color + hexadecimal */
+  .qr-color { display: flex; align-items: center; gap: 0.45rem; }
+  .qr-color input[type='color'] {
+    width: 46px;
+    height: 38px;
+    padding: 2px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    background: #fff;
+    cursor: pointer;
+    flex: 0 0 auto;
+  }
+  .qr-color .hex {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    text-transform: uppercase;
+  }
+
+  .qr-sub {
+    border-left: 3px solid var(--primary);
+    padding-left: 0.85rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+  }
+
+  .qr-check { display: flex; align-items: center; gap: 0.5rem; color: var(--text); font-size: 0.9rem; cursor: pointer; }
+  .qr-check input { width: auto; accent-color: var(--primary); }
+
+  .qr-group input[type='range'] { accent-color: var(--primary); width: 100%; }
+  .qr-group output { font-weight: 600; color: var(--primary); }
+
+  .qr-hint { margin: 0; font-size: 0.82rem; color: #92400e; }
+
+  /* Estilos rápidos */
+  .qr-presets { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+  .qr-preset {
+    border: 1px solid #cbd5e1;
+    background: var(--surface-soft);
+    color: var(--text);
+    border-radius: 999px;
+    padding: 0.35rem 0.8rem;
+    font: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+  .qr-preset:hover { border-color: var(--primary); color: var(--primary); }
+
+  /* Logo */
+  .qr-logo-row { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+  .qr-logo-drop { flex: 1 1 220px; padding: 1rem; display: flex; flex-direction: column; gap: 0.2rem; }
+  .qr-logo-drop small { color: var(--muted); }
+  .qr-logo-remove {
+    border-color: #cbd5e1;
+    color: var(--text);
+    font: inherit;
+    cursor: pointer;
+    padding: 0.5rem 0.9rem;
+    border-radius: 8px;
+    background: #fff;
+  }
+
+  /* Vista previa */
+  .qr-side { display: flex; flex-direction: column; gap: 1rem; position: sticky; top: 90px; min-width: 0; }
+
+  .qr-preview-card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  /* Tablero de ajedrez para que se vea la transparencia */
+  .qr-preview {
+    width: 100%;
+    border-radius: 10px;
+    padding: 10px;
+    background-color: #fff;
+    background-image:
+      linear-gradient(45deg, #e2e8f0 25%, transparent 25%, transparent 75%, #e2e8f0 75%),
+      linear-gradient(45deg, #e2e8f0 25%, transparent 25%, transparent 75%, #e2e8f0 75%);
+    background-size: 18px 18px;
+    background-position: 0 0, 9px 9px;
+  }
+  .qr-preview :global(canvas),
+  .qr-preview :global(svg),
+  .qr-preview :global(img) {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+  .qr-preview :global(.qr-empty) {
+    margin: 0;
+    padding: 2.5rem 1rem;
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+
+  .qr-actions {
+    background: var(--surface);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+  }
+  .qr-buttons { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+  .qr-buttons .btn-primary { flex: 1 1 70px; padding: 0.6rem 0.8rem; font-size: 0.9rem; }
+  .qr-buttons .btn-outline {
+    flex: 1 1 140px;
+    border-color: #cbd5e1;
+    color: var(--text);
+    background: #fff;
+  }
+  .qr-buttons .btn-outline:hover { background: var(--surface-soft); }
+
+  @media (max-width: 820px) {
+    .qr-layout { grid-template-columns: 1fr; }
+    /* En una columna: vista previa primero, centrada y sin ocupar todo el ancho. */
+    .qr-side { position: static; order: -1; width: 100%; max-width: 420px; margin: 0 auto; }
+  }
+
+  @media (max-width: 560px) {
+    .qr-grid2 { grid-template-columns: 1fr; }
+    .qr-group { padding: 1rem; }
+  }
+</style>
+
+<script>
+  import * as qrModule from 'qr-code-styling';
+
+  type AnyObject = Record<string, unknown>;
+  type QRInstance = {
+    update(options: AnyObject): void;
+    append(container: HTMLElement): void;
+    getRawData(extension?: string): Promise<Blob | null>;
+  };
+  type QRCtor = new (options?: AnyObject) => QRInstance;
+
+  // La librería se publica como UMD: se resuelve el constructor admitiendo
+  // las dos formas de interoperabilidad (default directo o dentro de default).
+  function resolveCtor(): QRCtor {
+    const mod = qrModule as unknown as AnyObject;
+    const first = typeof mod.default === 'function' ? mod.default : mod;
+    const candidate = typeof first === 'function' ? first : (first as AnyObject | null | undefined)?.default;
+    if (typeof candidate !== 'function') throw new Error('No se pudo cargar el generador de códigos QR.');
+    return candidate as QRCtor;
+  }
+
+  const QRCodeStyling = resolveCtor();
+
+  const $ = <T extends HTMLElement>(id: string): T => {
+    const element = document.getElementById(id);
+    if (!element) throw new Error(`Elemento #${id} no encontrado`);
+    return element as T;
+  };
+
+  const previewEl = $<HTMLDivElement>('qr-preview');
+  const statusEl = $<HTMLParagraphElement>('qr-status');
+  const form = $<HTMLFormElement>('qr-form');
+
+  const value = (id: string): string => ($<HTMLInputElement>(id)).value;
+  const isChecked = (id: string): boolean => $<HTMLInputElement>(id).checked;
+  const number = (id: string): number => Number(value(id));
+
+  function setStatus(message: string, isError = false) {
+    statusEl.textContent = message;
+    statusEl.classList.toggle('error', isError);
+  }
+
+  function normalizeHex(raw: string): string | null {
+    let hex = raw.trim().replace(/^#/, '');
+    if (/^[0-9a-f]{3}$/i.test(hex)) hex = hex.split('').map((c) => c + c).join('');
+    if (!/^[0-9a-f]{6}$/i.test(hex)) return null;
+    return `#${hex.toUpperCase()}`;
+  }
+
+  /* ── Colores: sincroniza el selector con el campo hexadecimal ── */
+  const colorPairs = new Map<string, { input: HTMLInputElement; text: HTMLInputElement }>();
+
+  function bindColor(baseId: string) {
+    const input = $<HTMLInputElement>(`${baseId}-input`);
+    const text = $<HTMLInputElement>(baseId);
+    colorPairs.set(baseId, { input, text });
+    input.addEventListener('input', () => {
+      text.value = input.value.toUpperCase();
+      schedule();
+    });
+    text.addEventListener('input', () => {
+      const hex = normalizeHex(text.value);
+      if (!hex) return;
+      input.value = hex;
+      schedule();
+    });
+    text.addEventListener('blur', () => {
+      text.value = input.value.toUpperCase();
+    });
+  }
+
+  function getColor(baseId: string): string {
+    return (colorPairs.get(baseId)?.input.value ?? '#000000').toUpperCase();
+  }
+
+  function setColor(baseId: string, hex: string) {
+    const pair = colorPairs.get(baseId);
+    if (!pair) return;
+    const normalized = normalizeHex(hex) ?? '#000000';
+    pair.input.value = normalized;
+    pair.text.value = normalized;
+  }
+
+  for (const baseId of ['dots-color', 'dots-color-2', 'corner-color', 'corner-dot-color', 'bg-color', 'bg-color-2']) {
+    bindColor(baseId);
+  }
+
+  /* ── Contenido ──────────────────────────────────────────── */
+  let mode = 'text';
+
+  const tabButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('.qr-tab'));
+  const panes = Array.from(document.querySelectorAll<HTMLElement>('.qr-pane'));
+
+  function setMode(next: string) {
+    mode = next;
+    for (const button of tabButtons) {
+      const active = button.dataset.mode === next;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    }
+    for (const pane of panes) pane.hidden = pane.dataset.pane !== next;
+    render();
+  }
+
+  // Escapa los caracteres reservados del formato WIFI:.
+  function escapeWifi(raw: string): string {
+    return raw.replace(/([\\;,:"])/g, '\\$1');
+  }
+
+  function buildContent(): string {
+    if (mode === 'text') return $<HTMLTextAreaElement>('qr-text').value.trim();
+
+    if (mode === 'wifi') {
+      const ssid = value('wifi-ssid').trim();
+      if (!ssid) return '';
+      const password = value('wifi-pass');
+      const encryption = $<HTMLSelectElement>('wifi-enc').value;
+      let payload = `WIFI:T:${encryption};S:${escapeWifi(ssid)};`;
+      if (password) payload += `P:${escapeWifi(password)};`;
+      if (isChecked('wifi-hidden')) payload += 'H:true;';
+      return `${payload};`;
+    }
+
+    if (mode === 'contact') {
+      const first = value('contact-first').trim();
+      const last = value('contact-last').trim();
+      if (!first && !last) return '';
+      const phone = value('contact-phone').trim();
+      const email = value('contact-email').trim();
+      const org = value('contact-org').trim();
+      const url = value('contact-url').trim();
+      const lines = [
+        'BEGIN:VCARD',
+        'VERSION:3.0',
+        `N:${last};${first};;;`,
+        `FN:${[first, last].filter(Boolean).join(' ')}`
+      ];
+      if (org) lines.push(`ORG:${org}`);
+      if (phone) lines.push(`TEL;TYPE=CELL:${phone}`);
+      if (email) lines.push(`EMAIL:${email}`);
+      if (url) lines.push(`URL:${url}`);
+      lines.push('END:VCARD');
+      return lines.join('\r\n');
+    }
+
+    if (mode === 'email') {
+      const to = value('email-to').trim();
+      const subject = value('email-subject').trim();
+      const body = $<HTMLTextAreaElement>('email-body').value.trim();
+      if (!to && !subject && !body) return '';
+      const query: string[] = [];
+      if (subject) query.push(`subject=${encodeURIComponent(subject)}`);
+      if (body) query.push(`body=${encodeURIComponent(body)}`);
+      return `mailto:${to}${query.length ? `?${query.join('&')}` : ''}`;
+    }
+
+    return '';
+  }
+
+  /* ── Opciones del QR ────────────────────────────────────── */
+  type GradientOptions = {
+    type: string;
+    rotation: number;
+    colorStops: { offset: number; color: string }[];
+  };
+
+  function buildGradient(typeId: string, rotationId: string, startId: string, endId: string): GradientOptions {
+    return {
+      type: value(typeId),
+      rotation: (number(rotationId) * Math.PI) / 180,
+      colorStops: [
+        { offset: 0, color: getColor(startId) },
+        { offset: 1, color: getColor(endId) }
+      ]
+    };
+  }
+
+  function buildOptions(content: string): AnyObject {
+    const transparent = isChecked('bg-transparent');
+
+    const dotsOptions: AnyObject = { type: value('dots-shape') };
+    if (isChecked('dots-gradient')) {
+      dotsOptions.gradient = buildGradient('dots-gradient-type', 'dots-gradient-rotation', 'dots-color', 'dots-color-2');
+      dotsOptions.color = undefined;
+    } else {
+      dotsOptions.color = getColor('dots-color');
+      dotsOptions.gradient = undefined;
+    }
+
+    const backgroundOptions: AnyObject = { round: number('bg-round') / 100 };
+    if (transparent) {
+      backgroundOptions.color = 'transparent';
+      backgroundOptions.gradient = undefined;
+    } else if (isChecked('bg-gradient')) {
+      backgroundOptions.gradient = buildGradient('bg-gradient-type', 'bg-gradient-rotation', 'bg-color', 'bg-color-2');
+      backgroundOptions.color = undefined;
+    } else {
+      backgroundOptions.color = getColor('bg-color');
+      backgroundOptions.gradient = undefined;
+    }
+
+    // Se envían SIEMPRE todas las claves (aunque valgan undefined) porque la
+    // librería combina las opciones con las anteriores y, si se omite una,
+    // conservaría el valor del render previo.
+    return {
+      width: number('qr-size'),
+      height: number('qr-size'),
+      margin: number('qr-margin'),
+      data: content,
+      type: 'canvas',
+      image: logoDataUrl ?? undefined,
+      imageOptions: {
+        imageSize: number('logo-size') / 100,
+        margin: number('logo-margin'),
+        hideBackgroundDots: isChecked('logo-hide-dots')
+      },
+      qrOptions: { errorCorrectionLevel: value('qr-level') },
+      dotsOptions,
+      cornersSquareOptions: { type: value('corner-shape'), color: getColor('corner-color'), gradient: undefined },
+      cornersDotOptions: { type: value('corner-dot-shape'), color: getColor('corner-dot-color'), gradient: undefined },
+      backgroundOptions
+    };
+  }
+
+  /* ── Vista previa ───────────────────────────────────────── */
+  const ctor: QRCtor = QRCodeStyling;
+  let qr: QRInstance | null = null;
+  let timer: number | undefined;
+
+  function schedule() {
+    window.clearTimeout(timer);
+    timer = window.setTimeout(render, 120);
+  }
+
+  function showPlaceholder(message: string) {
+    previewEl.replaceChildren();
+    qr = null;
+    const empty = document.createElement('p');
+    empty.className = 'qr-empty';
+    empty.textContent = message;
+    previewEl.append(empty);
+  }
+
+  function render() {
+    try {
+      const content = buildContent();
+      if (!content) {
+        showPlaceholder('Escribe o elige un contenido para ver tu código QR.');
+        setStatus('Falta el contenido.');
+        return;
+      }
+
+      const options = buildOptions(content);
+      if (qr) {
+        qr.update(options);
+      } else {
+        // `append` no vacía el contenedor: hay que quitar el mensaje de ayuda
+        // antes de añadir el lienzo para que no aparezcan los dos a la vez.
+        previewEl.replaceChildren();
+        qr = new ctor(options);
+        qr.append(previewEl);
+      }
+
+      const characters = `${
+        content.length === 1 ? '1 carácter' : `${content.length} caracteres`
+      } codificados`;
+      setStatus(content.length > 700 ? `Listo · ${characters} (contenido muy largo: comprueba que se lee bien).` : `Listo · ${characters}.`);
+    } catch (error) {
+      showPlaceholder('No se pudo generar el código QR.');
+      setStatus(error instanceof Error ? error.message : 'No se pudo generar el código QR.', true);
+    }
+  }
+
+  /* ── Logo central ───────────────────────────────────────── */
+  let logoDataUrl: string | null = null;
+
+  function readAsDataUrl(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(new Error('No se pudo leer el logo.'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function syncLogoUi() {
+    const title = $('logo-title');
+    const removeButton = $<HTMLButtonElement>('logo-remove');
+    title.textContent = logoDataUrl ? 'Cambiar el logo' : 'Haz clic para elegir un logo';
+    removeButton.hidden = !logoDataUrl;
+  }
+
+  function ensureHighCorrection() {
+    if (!logoDataUrl) return;
+    const level = $<HTMLSelectElement>('qr-level');
+    if (level.value === 'H') return;
+    level.value = 'H';
+    $('logo-hint').hidden = false;
+  }
+
+  $<HTMLInputElement>('logo-input').addEventListener('change', async (event) => {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setStatus('El logo debe ser una imagen (PNG, JPG, WebP o SVG).', true);
+      input.value = '';
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setStatus('El logo no puede superar los 2 MB.', true);
+      input.value = '';
+      return;
+    }
+    try {
+      logoDataUrl = await readAsDataUrl(file);
+      syncLogoUi();
+      ensureHighCorrection();
+      render();
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'No se pudo leer el logo.', true);
+    }
+  });
+
+  $<HTMLButtonElement>('logo-remove').addEventListener('click', () => {
+    logoDataUrl = null;
+    $<HTMLInputElement>('logo-input').value = '';
+    $('logo-hint').hidden = true;
+    syncLogoUi();
+    render();
+  });
+
+  /* ── Controles genéricos ────────────────────────────────── */
+  const ranges: [string, string, (v: number) => string][] = [
+    ['dots-gradient-rotation', 'dots-rot-out', (v) => `${v}°`],
+    ['bg-gradient-rotation', 'bg-rot-out', (v) => `${v}°`],
+    ['bg-round', 'bg-round-out', (v) => `${v}%`],
+    ['logo-size', 'logo-size-out', (v) => `${v}%`],
+    ['logo-margin', 'logo-margin-out', (v) => `${v} px`],
+    ['qr-margin', 'qr-margin-out', (v) => `${v} px`]
+  ];
+
+  for (const [inputId, outputId, format] of ranges) {
+    const input = $<HTMLInputElement>(inputId);
+    const output = $(outputId);
+    const sync = () => {
+      output.textContent = format(Number(input.value));
+    };
+    input.addEventListener('input', () => {
+      sync();
+      schedule();
+    });
+    sync();
+  }
+
+  // Subpaneles de degradado: solo se muestran cuando el degradado está activo.
+  const dotsGradient = $<HTMLInputElement>('dots-gradient');
+  const bgGradient = $<HTMLInputElement>('bg-gradient');
+  const bgTransparent = $<HTMLInputElement>('bg-transparent');
+
+  function syncGradientFields() {
+    $('dots-gradient-fields').hidden = !dotsGradient.checked;
+    $('bg-gradient-fields').hidden = !bgGradient.checked || bgTransparent.checked;
+    $<HTMLSelectElement>('bg-gradient-type').disabled = bgTransparent.checked;
+  }
+
+  for (const control of [dotsGradient, bgGradient, bgTransparent]) {
+    control.addEventListener('change', () => {
+      syncGradientFields();
+      schedule();
+    });
+  }
+
+  // Cualquier otro control del formulario vuelve a dibujar la vista previa.
+  form.addEventListener('input', (event) => {
+    const target = event.target as HTMLElement | null;
+    if (target?.matches('[type="range"], [type="checkbox"], [type="color"]')) return; // ya tienen su listener
+    schedule();
+  });
+  form.addEventListener('change', (event) => {
+    const target = event.target as HTMLElement | null;
+    if (target?.matches('[type="range"], [type="checkbox"], [type="color"]')) return;
+    schedule();
+  });
+  form.addEventListener('submit', (event) => event.preventDefault());
+
+  for (const button of tabButtons) {
+    button.addEventListener('click', () => setMode(button.dataset.mode ?? 'text'));
+  }
+
+  /* ── Descargas y portapapeles ───────────────────────────── */
+  const MIME: Record<string, string> = {
+    png: 'image/png',
+    svg: 'image/svg+xml',
+    jpeg: 'image/jpeg',
+    webp: 'image/webp'
+  };
+
+  function safeFileName(): string {
+    const raw = value('file-name').trim() || 'codigo-qr';
+    return raw.replace(/[\\/:*?"<>|]+/g, '-').slice(0, 60);
+  }
+
+  function downloadBlob(blob: Blob, name: string) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = name;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  async function getBlob(extension: string): Promise<Blob> {
+    if (!qr) throw new Error('Escribe primero un contenido para generar el código QR.');
+    if (!MIME[extension]) throw new Error('Formato de descarga no soportado.');
+    const blob = await qr.getRawData(extension);
+    if (!blob) throw new Error('No se pudo generar el archivo.');
+    return blob;
+  }
+
+  for (const button of Array.from(document.querySelectorAll<HTMLButtonElement>('.qr-buttons [data-ext]'))) {
+    button.addEventListener('click', async () => {
+      const extension = button.dataset.ext ?? 'png';
+      button.disabled = true;
+      try {
+        const blob = await getBlob(extension);
+        downloadBlob(blob, `${safeFileName()}.${extension}`);
+        setStatus(`Descargado en ${extension.toUpperCase()}.`);
+      } catch (error) {
+        setStatus(error instanceof Error ? error.message : 'No se pudo descargar el código QR.', true);
+      } finally {
+        button.disabled = false;
+      }
+    });
+  }
+
+  $<HTMLButtonElement>('copy-image').addEventListener('click', async () => {
+    try {
+      const blob = await getBlob('png');
+      const ClipboardItemCtor = (window as unknown as { ClipboardItem?: typeof ClipboardItem }).ClipboardItem;
+      if (!navigator.clipboard || !ClipboardItemCtor) throw new Error('Tu navegador no permite copiar imágenes.');
+      await navigator.clipboard.write([new ClipboardItemCtor({ 'image/png': blob })]);
+      setStatus('Imagen copiada al portapapeles.');
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'No se pudo copiar la imagen.', true);
+    }
+  });
+
+  $<HTMLButtonElement>('copy-content').addEventListener('click', async () => {
+    const content = buildContent();
+    if (!content) {
+      setStatus('No hay contenido que copiar.', true);
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(content);
+      setStatus('Contenido copiado al portapapeles.');
+    } catch {
+      setStatus('No se pudo copiar el contenido.', true);
+    }
+  });
+
+  /* ── Estilos rápidos ────────────────────────────────────── */
+  const presets: Record<string, Record<string, string | number | boolean>> = {
+    clasico: {
+      'dots-shape': 'square',
+      'dots-gradient': false,
+      'dots-color': '#0F172A',
+      'corner-shape': 'square',
+      'corner-color': '#0F172A',
+      'corner-dot-shape': 'square',
+      'corner-dot-color': '#0F172A',
+      'bg-transparent': false,
+      'bg-gradient': false,
+      'bg-color': '#FFFFFF',
+      'bg-round': 0
+    },
+    redondeado: {
+      'dots-shape': 'extra-rounded',
+      'dots-gradient': false,
+      'dots-color': '#1D4ED8',
+      'corner-shape': 'extra-rounded',
+      'corner-color': '#1D4ED8',
+      'corner-dot-shape': 'dot',
+      'corner-dot-color': '#1D4ED8',
+      'bg-transparent': false,
+      'bg-gradient': false,
+      'bg-color': '#EFF6FF',
+      'bg-round': 35
+    },
+    puntos: {
+      'dots-shape': 'dots',
+      'dots-gradient': false,
+      'dots-color': '#0F766E',
+      'corner-shape': 'dot',
+      'corner-color': '#0F766E',
+      'corner-dot-shape': 'dot',
+      'corner-dot-color': '#115E59',
+      'bg-transparent': false,
+      'bg-gradient': false,
+      'bg-color': '#FFFFFF',
+      'bg-round': 0
+    },
+    neon: {
+      'dots-shape': 'classy-rounded',
+      'dots-gradient': true,
+      'dots-color': '#22D3EE',
+      'dots-color-2': '#A855F7',
+      'dots-gradient-type': 'linear',
+      'dots-gradient-rotation': 45,
+      'corner-shape': 'extra-rounded',
+      'corner-color': '#A855F7',
+      'corner-dot-shape': 'dot',
+      'corner-dot-color': '#22D3EE',
+      'bg-transparent': false,
+      'bg-gradient': false,
+      'bg-color': '#0B1220',
+      'bg-round': 20
+    },
+    atardecer: {
+      'dots-shape': 'rounded',
+      'dots-gradient': true,
+      'dots-color': '#F97316',
+      'dots-color-2': '#DB2777',
+      'dots-gradient-type': 'linear',
+      'dots-gradient-rotation': 45,
+      'corner-shape': 'extra-rounded',
+      'corner-color': '#DB2777',
+      'corner-dot-shape': 'dot',
+      'corner-dot-color': '#F97316',
+      'bg-transparent': false,
+      'bg-gradient': false,
+      'bg-color': '#FFF7ED',
+      'bg-round': 15
+    },
+    oceano: {
+      'dots-shape': 'classy',
+      'dots-gradient': true,
+      'dots-color': '#0EA5E9',
+      'dots-color-2': '#1E40AF',
+      'dots-gradient-type': 'linear',
+      'dots-gradient-rotation': 90,
+      'corner-shape': 'extra-rounded',
+      'corner-color': '#1E40AF',
+      'corner-dot-shape': 'square',
+      'corner-dot-color': '#0EA5E9',
+      'bg-transparent': false,
+      'bg-gradient': false,
+      'bg-color': '#F0F9FF',
+      'bg-round': 25
+    },
+    bosque: {
+      'dots-shape': 'rounded',
+      'dots-gradient': false,
+      'dots-color': '#166534',
+      'corner-shape': 'extra-rounded',
+      'corner-color': '#14532D',
+      'corner-dot-shape': 'dot',
+      'corner-dot-color': '#166534',
+      'bg-transparent': false,
+      'bg-gradient': false,
+      'bg-color': '#F0FDF4',
+      'bg-round': 10
+    },
+    elegante: {
+      'dots-shape': 'classy',
+      'dots-gradient': false,
+      'dots-color': '#111827',
+      'corner-shape': 'square',
+      'corner-color': '#111827',
+      'corner-dot-shape': 'square',
+      'corner-dot-color': '#B45309',
+      'bg-transparent': false,
+      'bg-gradient': false,
+      'bg-color': '#FFFFFF',
+      'bg-round': 0
+    },
+    oscuro: {
+      'dots-shape': 'dots',
+      'dots-gradient': true,
+      'dots-color': '#FDE68A',
+      'dots-color-2': '#F59E0B',
+      'dots-gradient-type': 'radial',
+      'dots-gradient-rotation': 0,
+      'corner-shape': 'dot',
+      'corner-color': '#F59E0B',
+      'corner-dot-shape': 'dot',
+      'corner-dot-color': '#FDE68A',
+      'bg-transparent': false,
+      'bg-gradient': false,
+      'bg-color': '#111827',
+      'bg-round': 24
+    },
+    'sin-fondo': {
+      'dots-shape': 'extra-rounded',
+      'dots-gradient': false,
+      'dots-color': '#0F172A',
+      'corner-shape': 'extra-rounded',
+      'corner-color': '#0F172A',
+      'corner-dot-shape': 'dot',
+      'corner-dot-color': '#0F172A',
+      'bg-transparent': true,
+      'bg-gradient': false,
+      'bg-color': '#FFFFFF',
+      'bg-round': 0
+    }
+  };
+
+  function applyPreset(values: Record<string, string | number | boolean>) {
+    for (const [id, raw] of Object.entries(values)) {
+      const element = document.getElementById(id);
+      if (element instanceof HTMLInputElement && element.type === 'checkbox') {
+        element.checked = Boolean(raw);
+      } else if (element instanceof HTMLInputElement || element instanceof HTMLSelectElement) {
+        element.value = String(raw);
+      }
+    }
+    for (const baseId of ['dots-color', 'dots-color-2', 'corner-color', 'corner-dot-color', 'bg-color', 'bg-color-2']) {
+      const hex = values[baseId];
+      if (typeof hex === 'string') setColor(baseId, hex);
+    }
+    for (const [inputId, outputId, format] of ranges) {
+      const input = $<HTMLInputElement>(inputId);
+      const output = $(outputId);
+      void inputId;
+      output.textContent = format(Number(input.value));
+    }
+    syncGradientFields();
+    render();
+  }
+
+  for (const button of Array.from(document.querySelectorAll<HTMLButtonElement>('.qr-preset'))) {
+    button.addEventListener('click', () => {
+      const preset = presets[button.dataset.preset ?? ''];
+      if (preset) applyPreset(preset);
+    });
+  }
+
+  /* ── Arranque ───────────────────────────────────────────── */
+  syncLogoUi();
+  syncGradientFields();
+  render();
+</script>

@@ -27,13 +27,13 @@ function requireAdmin(req, res, next) {
 
 /**
  * Adjunta el usuario actual (req.user) a partir de la sesión.
- * Si la sesión referencia un usuario inexistente, la destruye.
+ * Si la sesión referencia un usuario inexistente o suspendido, la destruye.
  */
 async function attachUser(req, res, next) {
   if (!req.session || !req.session.userId) return next();
   try {
     const user = await db('users').where({ id: req.session.userId }).first();
-    if (!user) {
+    if (!user || user.status === 'banned') {
       return req.session.destroy(() => next());
     }
     // Solo exponemos campos seguros, nunca el hash

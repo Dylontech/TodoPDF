@@ -1,0 +1,397 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Subdividir imagen" noindex>
+  <section class="tool split-tool">
+    <h1>✂️ Subdividir imagen</h1>
+    <p>Divide una imagen en una cuadrícula y descarga todas las piezas en un ZIP.</p>
+
+    <form id="split-form" class="split-form">
+      <label class="dropzone" for="image-input">
+        <span id="dropzone-title">Haz clic para elegir una imagen</span>
+        <small>PNG, JPG, WebP, GIF o TIFF</small>
+        <input id="image-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/tiff,.png,.jpg,.jpeg,.webp,.gif,.tif,.tiff" hidden />
+      </label>
+
+      <div class="split-controls">
+        <label class="field">
+          <span>Cortes a lo ancho (columnas)</span>
+          <input id="columns" type="number" min="1" max="20" value="2" inputmode="numeric" />
+        </label>
+        <label class="field">
+          <span>Cortes a lo largo (filas)</span>
+          <input id="rows" type="number" min="1" max="20" value="2" inputmode="numeric" />
+        </label>
+      </div>
+
+      <div id="preview-section" class="preview-section" hidden>
+        <div class="preview-heading">
+          <h2>Previsualización</h2>
+          <span id="piece-count" class="preview-count"></span>
+        </div>
+        <div id="preview-frame" class="preview-frame">
+          <img id="preview-image" alt="Previsualización de la imagen" />
+          <div id="grid-overlay" class="grid-overlay" aria-hidden="true"></div>
+        </div>
+        <div id="piece-list" class="piece-list"></div>
+      </div>
+
+      <button id="submit-button" class="btn-primary" type="submit" disabled>Subdividir imagen</button>
+      <p id="status" class="status" role="status"></p>
+    </form>
+    <div id="result" class="result" hidden></div>
+  </section>
+</Layout>
+
+<script>
+  type PreviewPart = { row: number; column: number; left: number; top: number; width: number; height: number };
+
+  const MAX_SIDE = 2048; // lado mayor del lienzo de trabajo (igual que quitar-objetos)
+  const MAX_AXIS = 20;
+  const MAX_PARTS = 100;
+
+  const $ = <T extends HTMLElement>(id: string) => {
+    const element = document.getElementById(id);
+    if (!element) throw new Error(`Elemento #${id} no encontrado`);
+    return element as T;
+  };
+
+  const form = $<HTMLFormElement>('split-form');
+  const fileInput = $<HTMLInputElement>('image-input');
+  const dropzoneTitle = $('dropzone-title');
+  const columnsInput = $<HTMLInputElement>('columns');
+  const rowsInput = $<HTMLInputElement>('rows');
+  const previewSection = $('preview-section');
+  const previewFrame = $('preview-frame');
+  const previewImage = $<HTMLImageElement>('preview-image');
+  const gridOverlay = $('grid-overlay');
+  const pieceCount = $('piece-count');
+  const pieceList = $('piece-list');
+  const submitButton = $<HTMLButtonElement>('submit-button');
+  const status = $('status');
+  const result = $('result');
+
+  // Lienzo de trabajo: ÚNICA fuente de verdad de la previsualización. Se rellena
+  // con el bitmap ya orientado (EXIF aplicado, igual que sharp().rotate() en el
+  // backend) y limitado a MAX_SIDE: marco, rejilla y trozos salen siempre del
+  // mismo bitmap, nunca de naturalWidth/naturalHeight.
+  const baseCanvas = document.createElement('canvas');
+
+  let selectedFile: File | null = null;
+  let parts: PreviewPart[] = [];
+  let trueWidth = 0; // píxeles reales (orientados) — los mismos que corta el backend
+  let trueHeight = 0;
+  let baseWidth = 0; // píxeles del lienzo de trabajo (tope MAX_SIDE)
+  let baseHeight = 0;
+  let previewUrl: string | null = null; // blob URL del marco (se revoca al reemplazarla)
+  let previewError: string | null = null; // motivo si el navegador no pudo decodificar
+
+  function setStatus(message: string, isError = false) {
+    status.textContent = message;
+    status.classList.toggle('error', isError);
+  }
+
+  function readAxis(input: HTMLInputElement) {
+    const value = Number(input.value);
+    return Number.isInteger(value) && value >= 1 && value <= MAX_AXIS ? value : 0;
+  }
+
+  function sizes(total: number, count: number) {
+    const base = Math.floor(total / count);
+    const remainder = total % count;
+    return Array.from({ length: count }, (_, index) => base + (index < remainder ? 1 : 0));
+  }
+
+  /** Bordes acumulados de los cortes en píxeles reales: [0, …, total]. */
+  function boundaries(total: number, count: number) {
+    const edges = [0];
+    sizes(total, count).forEach((size) => edges.push(edges[edges.length - 1] + size));
+    return edges;
+  }
+
+  function pad(value: number) {
+    return String(value).padStart(2, '0');
+  }
+
+  function calculateParts(width: number, height: number, columns: number, rows: number) {
+    const columnWidths = sizes(width, columns);
+    const rowHeights = sizes(height, rows);
+    const nextParts: PreviewPart[] = [];
+    let top = 0;
+    for (let row = 0; row < rows; row++) {
+      let left = 0;
+      for (let column = 0; column < columns; column++) {
+        nextParts.push({ row: row + 1, column: column + 1, left, top, width: columnWidths[column], height: rowHeights[row] });
+        left += columnWidths[column];
+      }
+      top += rowHeights[row];
+    }
+    return nextParts;
+  }
+
+  /** Líneas de corte en las posiciones REALES (acumuladas), no en porcentajes iguales. */
+  function renderGrid(columns: number, rows: number) {
+    gridOverlay.replaceChildren();
+    boundaries(trueWidth, columns)
+      .slice(1, -1)
+      .forEach((x) => {
+        const line = document.createElement('span');
+        line.className = 'grid-line grid-line-vertical';
+        line.style.left = `${(x / trueWidth) * 100}%`;
+        gridOverlay.append(line);
+      });
+    boundaries(trueHeight, rows)
+      .slice(1, -1)
+      .forEach((y) => {
+        const line = document.createElement('span');
+        line.className = 'grid-line grid-line-horizontal';
+        line.style.top = `${(y / trueHeight) * 100}%`;
+        gridOverlay.append(line);
+      });
+  }
+
+  function renderPieces() {
+    pieceList.replaceChildren();
+    if (!baseWidth || !baseHeight || !trueWidth || !trueHeight) return;
+    const scaleX = baseWidth / trueWidth;
+    const scaleY = baseHeight / trueHeight;
+    parts.forEach((part) => {
+      // Bordes escalados a partir de los acumulados para no dejar costuras de 1 px.
+      const x0 = Math.round(part.left * scaleX);
+      const y0 = Math.round(part.top * scaleY);
+      const x1 = Math.round((part.left + part.width) * scaleX);
+      const y1 = Math.round((part.top + part.height) * scaleY);
+      const sourceWidth = Math.max(1, x1 - x0);
+      const sourceHeight = Math.max(1, y1 - y0);
+      const canvas = document.createElement('canvas');
+      canvas.width = sourceWidth;
+      canvas.height = sourceHeight;
+      canvas.setAttribute('aria-label', `Fila ${part.row}, columna ${part.column}`);
+      const item = document.createElement('figure');
+      item.className = 'piece-item';
+      const context = canvas.getContext('2d');
+      if (context) {
+        // Se corta del MISMO lienzo que se previsualiza (no del <img>).
+        context.drawImage(baseCanvas, x0, y0, sourceWidth, sourceHeight, 0, 0, sourceWidth, sourceHeight);
+      }
+      const caption = document.createElement('figcaption');
+      caption.textContent = `fila-${pad(part.row)}-columna-${pad(part.column)} · ${part.width} × ${part.height} px`;
+      item.append(canvas, caption);
+      pieceList.append(item);
+    });
+    // La galería refleja la cuadrícula del corte (mismas filas y columnas).
+    pieceList.style.gridTemplateColumns = `repeat(${readAxis(columnsInput) || 1}, minmax(72px, 1fr))`;
+    pieceCount.textContent = `${parts.length} piezas · ${trueWidth} × ${trueHeight} px`;
+  }
+
+  function updatePreview() {
+    const columns = readAxis(columnsInput);
+    const rows = readAxis(rowsInput);
+    const hasPreview = trueWidth > 0 && trueHeight > 0;
+    const validGrid = columns > 0 && rows > 0 && columns * rows <= MAX_PARTS;
+    // Sin previsualización (p. ej. TIFF, que el navegador no decodifica) se puede
+    // subdividir igualmente: el backend sí lo acepta.
+    const fits = !hasPreview || (columns <= trueWidth && rows <= trueHeight);
+    submitButton.disabled = !selectedFile || !validGrid || !fits;
+    if (!selectedFile) return;
+    if (!validGrid) {
+      previewSection.hidden = true;
+      setStatus(`La cuadrícula debe tener entre 1 y ${MAX_PARTS} piezas (máximo ${MAX_AXIS} por eje).`, true);
+      return;
+    }
+    if (!fits) {
+      previewSection.hidden = true;
+      setStatus('Hay más cortes que píxeles en la imagen: reduce las filas o las columnas.', true);
+      return;
+    }
+    if (!hasPreview) {
+      previewSection.hidden = true;
+      setStatus(
+        `No se pudo previsualizar esta imagen (${previewError || 'formato no soportado por el navegador'}), pero puedes subdividirla igualmente.`,
+        true
+      );
+      return;
+    }
+    parts = calculateParts(trueWidth, trueHeight, columns, rows);
+    renderGrid(columns, rows);
+    renderPieces();
+    previewSection.hidden = false;
+    setStatus('');
+  }
+
+  /**
+   * Carga el archivo en el lienzo de trabajo aplicando la orientación EXIF
+   * (createImageBitmap con imageOrientation 'from-image'), igual que hace el
+   * backend con sharp().rotate(): así lo que se previsualiza es exactamente lo
+   * que se va a cortar. Fallback a <img> en navegadores sin esa opción.
+   */
+  async function loadImage(file: File) {
+    trueWidth = 0;
+    trueHeight = 0;
+    baseWidth = 0;
+    baseHeight = 0;
+    parts = [];
+    previewError = null;
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+      previewUrl = null;
+    }
+
+    let source: ImageBitmap | HTMLImageElement;
+    let width = 0;
+    let height = 0;
+    let isBitmap = false;
+    try {
+      const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+      source = bitmap;
+      width = bitmap.width;
+      height = bitmap.height;
+      isBitmap = true;
+    } catch {
+      const element = new Image();
+      const url = URL.createObjectURL(file);
+      try {
+        // onload/onerror se asignan ANTES de src para no perder el evento.
+        await new Promise<void>((resolve, reject) => {
+          element.onload = () => resolve();
+          element.onerror = () => reject(new Error('No se pudo leer la imagen.'));
+          element.src = url;
+        });
+      } catch (error) {
+        URL.revokeObjectURL(url);
+        throw error;
+      }
+      URL.revokeObjectURL(url);
+      source = element;
+      width = element.naturalWidth;
+      height = element.naturalHeight;
+    }
+
+    if (!width || !height) throw new Error('La imagen no tiene dimensiones válidas.');
+    trueWidth = width;
+    trueHeight = height;
+
+    const scale = Math.min(1, MAX_SIDE / Math.max(width, height));
+    baseWidth = Math.max(1, Math.round(width * scale));
+    baseHeight = Math.max(1, Math.round(height * scale));
+    baseCanvas.width = baseWidth;
+    baseCanvas.height = baseHeight;
+    const context = baseCanvas.getContext('2d');
+    if (!context) throw new Error('El navegador no permite previsualizar la imagen.');
+    context.drawImage(source, 0, 0, baseWidth, baseHeight);
+    if (isBitmap) (source as ImageBitmap).close();
+
+    const blob = await new Promise<Blob | null>((resolve) => {
+      baseCanvas.toBlob((value) => resolve(value), 'image/png');
+    });
+    if (!blob) throw new Error('No se pudo preparar la previsualización.');
+    previewUrl = URL.createObjectURL(blob);
+    previewImage.src = previewUrl;
+  }
+
+  async function selectFile(file: File | undefined) {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      selectedFile = null;
+      submitButton.disabled = true;
+      setStatus('Selecciona un archivo de imagen válido.', true);
+      return;
+    }
+    selectedFile = file;
+    dropzoneTitle.textContent = `${file.name} · ${(file.size / 1048576).toFixed(2)} MB`;
+    result.hidden = true;
+    submitButton.disabled = true;
+    setStatus('Preparando la previsualización…');
+    try {
+      await loadImage(file);
+    } catch (error) {
+      // Sin previsualización: se puede subdividir igualmente (lo avisa updatePreview).
+      previewError = error instanceof Error ? error.message : String(error);
+      trueWidth = 0;
+      trueHeight = 0;
+      baseWidth = 0;
+      baseHeight = 0;
+      parts = [];
+      previewImage.removeAttribute('src');
+    }
+    updatePreview();
+  }
+
+  fileInput.addEventListener('change', () => selectFile(fileInput.files?.[0]));
+  columnsInput.addEventListener('input', updatePreview);
+  rowsInput.addEventListener('input', updatePreview);
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!selectedFile) return;
+    submitButton.disabled = true;
+    setStatus('Subdividiendo imagen…');
+    result.hidden = true;
+    try {
+      const body = new FormData();
+      body.append('files', selectedFile, selectedFile.name);
+      body.append('columns', columnsInput.value);
+      body.append('rows', rowsInput.value);
+      const response = await fetch('/api/split-image', { method: 'POST', body, credentials: 'include' });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'No se pudo subdividir la imagen.');
+      result.innerHTML = `<p>La imagen se ha dividido en ${data.parts} piezas y se ha guardado en tu historial.</p><a class="btn-primary" href="/api/convert/${data.id}/download">Descargar ZIP</a>`;
+      result.hidden = false;
+      setStatus('Subdivisión completada.');
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'No se pudo subdividir la imagen.', true);
+    } finally {
+      submitButton.disabled = false;
+    }
+  });
+
+  async function requireSession() {
+    try {
+      const response = await fetch('/api/auth/me', { credentials: 'include' });
+      const data = await response.json();
+      if (!response.ok || !data.user) location.href = '/login';
+    } catch {
+      location.href = '/login';
+    }
+  }
+
+  requireSession();
+</script>
+
+<style>
+  .split-tool { max-width: 960px; }
+  .split-form { display: grid; gap: 1.25rem; }
+  .dropzone { display: grid; gap: 0.35rem; place-items: center; min-height: 110px; padding: 1.25rem; border: 2px dashed var(--border, #cbd5e1); border-radius: 8px; cursor: pointer; text-align: center; }
+  .dropzone:hover, .dropzone:focus-within { border-color: var(--accent, #2563eb); background: color-mix(in srgb, var(--accent, #2563eb) 5%, transparent); }
+  .dropzone small { color: var(--muted, #64748b); }
+  .split-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+  .field { display: grid; gap: 0.45rem; }
+  .field input { width: 100%; }
+  .preview-section { display: grid; gap: 1rem; }
+  /* display:grid anula el display:none de [hidden]: hay que reponerlo explícitamente. */
+  .preview-section[hidden], .result[hidden] { display: none; }
+  .preview-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
+  .preview-heading h2 { margin: 0; }
+  .preview-count { color: var(--muted, #64748b); font-size: 0.9rem; text-align: right; }
+  .preview-frame { position: relative; width: min(100%, 760px); margin: 0 auto; background: #e2e8f0; line-height: 0; overflow: hidden; }
+  .preview-frame img { display: block; width: 100%; height: auto; }
+  .grid-overlay { position: absolute; inset: 0; pointer-events: none; }
+  /* Las líneas y las piezas se crean desde JS: el ámbito de Astro no las alcanza
+     (les faltaría el atributo data-astro-cid), así que sus reglas van en :global(). */
+  :global(.grid-line) { position: absolute; background: #f97316; box-shadow: 0 0 0 1px rgb(255 255 255 / 0.8); }
+  :global(.grid-line-vertical) { top: 0; bottom: 0; width: 2px; transform: translateX(-1px); }
+  :global(.grid-line-horizontal) { left: 0; right: 0; height: 2px; transform: translateY(-1px); }
+  /* Las columnas las fija el script para reflejar la cuadrícula del corte (scroll si hay muchas). */
+  .piece-list { display: grid; grid-template-columns: repeat(2, minmax(72px, 1fr)); gap: 0.8rem; overflow-x: auto; padding-bottom: 0.25rem; }
+  :global(.piece-item) { min-width: 0; margin: 0; padding: 0.55rem; border: 1px solid var(--border, #cbd5e1); border-radius: 6px; background: var(--surface, #fff); }
+  :global(.piece-item canvas) { display: block; width: 100%; height: auto; background: #f1f5f9; }
+  :global(.piece-item figcaption) { margin-top: 0.45rem; color: var(--muted, #64748b); font-size: 0.78rem; line-height: 1.25; }
+  .result { display: grid; gap: 0.75rem; margin-top: 1rem; }
+  .result .btn-primary { justify-self: start; text-decoration: none; }
+  @media (max-width: 600px) {
+    .split-controls { grid-template-columns: 1fr; }
+    .preview-heading { align-items: flex-start; flex-direction: column; gap: 0.35rem; }
+    .preview-count { text-align: left; }
+  }
+</style>
