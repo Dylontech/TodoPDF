@@ -121,6 +121,7 @@ services:
     command: npm run cleanup
     environment:
       TODOPDF_NODE_ENV: ${TODOPDF_NODE_ENV:-production}
+      TODOPDF_SESSION_SECRET: ${TODOPDF_SESSION_SECRET:?Define TODOPDF_SESSION_SECRET en .env}
       TODOPDF_DB_HOST: db
       TODOPDF_DB_PORT: ${TODOPDF_DB_PORT:-3306}
       TODOPDF_DB_NAME: ${TODOPDF_DB_NAME:-todopdf}

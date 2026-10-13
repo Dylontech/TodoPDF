@@ -197,6 +197,11 @@ Antes de iniciar el stack, copia `.env.example` a `.env` y completa como mínimo
 `PUBLIC_SITE_URL` y `PUBLIC_GOOGLE_CLIENT_ID`. Puedes generar secretos con
 `openssl rand -hex 32`. Compose detiene el arranque si faltan los valores obligatorios.
 
+Si el dominio público está detrás de Cloudflare, conserva el proxy naranja activo y configura el
+modo SSL/TLS como **Full (strict)**. El nginx incluido detecta `CF-Visitor` y reenvía el protocolo
+HTTPS externo al backend; esto es necesario para que `TODOPDF_COOKIE_SECURE=true` permita guardar
+la cookie de sesión aunque el salto interno Cloudflare → nginx use HTTP.
+
 ### Opción B — Desarrollo local (sin Docker)
 
 Además de **Node.js ≥ 20** y una **MariaDB/MySQL** local, instala las herramientas de sistema

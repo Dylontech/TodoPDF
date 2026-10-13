@@ -1,0 +1,388 @@
+---
+import Layout from '../layouts/Layout.astro';
+
+// Datos leídos del propio APK (aapt dump badging / unzip AndroidManifest.xml).
+const appVersion = '0.1.0';
+const appVersionCode = '1';
+const appSize = '≈207 MB';
+const appPackage = 'com.dylontech.pixelpvr.pixel_pvr';
+const minAndroid = 'Android 7.0 o superior (API 24)';
+const abis = 'arm64-v8a · armeabi-v7a · x86_64';
+---
+
+<Layout title="Descargar PixelPDF">
+  <section class="px">
+    <header class="px-hero">
+      <svg class="px-logo" viewBox="0 0 16 16" width="96" height="96"
+        shape-rendering="crispEdges" aria-hidden="true">
+        <rect x="0" y="0" width="16" height="16" fill="#0b1020" />
+        <rect x="1" y="1" width="14" height="14" fill="#3b82f6" />
+        <rect x="4" y="1" width="8" height="6" fill="#cbd5e1" />
+        <rect x="6" y="2" width="2" height="4" fill="#0b1020" />
+        <rect x="3" y="9" width="10" height="6" fill="#f8fafc" />
+        <rect x="4" y="10" width="8" height="1" fill="#94a3b8" />
+        <rect x="4" y="12" width="6" height="1" fill="#94a3b8" />
+      </svg>
+
+      <p class="px-kicker">App Android · 8-bit</p>
+      <h1 class="px-title">PixelPDF</h1>
+      <p class="px-tagline">
+        Escanea, guarda y comparte tus documentos en segundos, con una interfaz
+        retro de 8 bits. Todo tu papeleo, ordenado en el bolsillo.
+      </p>
+
+      <a class="px-btn" href="/PixelPDF.apk" download="PixelPDF.apk">
+        <svg viewBox="0 0 8 8" width="14" height="14" shape-rendering="crispEdges" aria-hidden="true">
+          <rect x="3" y="0" width="2" height="4" fill="currentColor" />
+          <rect x="1" y="4" width="6" height="1" fill="currentColor" />
+          <rect x="2" y="5" width="4" height="1" fill="currentColor" />
+          <rect x="3" y="6" width="2" height="1" fill="currentColor" />
+        </svg>
+        Descargar APK
+        <span class="px-btn-size">{appSize}</span>
+      </a>
+
+      <p class="px-note">
+        Instalación directa · <span class="px-hl">{minAndroid}</span>
+      </p>
+    </header>
+
+    <section class="px-panel" aria-labelledby="px-features-title">
+      <h2 id="px-features-title" class="px-h2">¿Qué hace PixelPDF?</h2>
+      <div class="px-grid">
+        <article class="px-card">
+          <svg class="px-ico" viewBox="0 0 8 8" width="32" height="32"
+            shape-rendering="crispEdges" aria-hidden="true">
+            <rect x="0" y="0" width="2" height="2" fill="#38e1ff" />
+            <rect x="6" y="0" width="2" height="2" fill="#38e1ff" />
+            <rect x="0" y="6" width="2" height="2" fill="#38e1ff" />
+            <rect x="6" y="6" width="2" height="2" fill="#38e1ff" />
+            <rect x="1" y="3" width="6" height="2" fill="#ff6ec7" />
+          </svg>
+          <h3>Escanear</h3>
+          <p>Captura documentos con la cámara y recórtalos al momento.</p>
+        </article>
+
+        <article class="px-card">
+          <svg class="px-ico" viewBox="0 0 8 8" width="32" height="32"
+            shape-rendering="crispEdges" aria-hidden="true">
+            <rect x="0" y="0" width="8" height="8" fill="#3b82f6" />
+            <rect x="2" y="0" width="4" height="3" fill="#cbd5e1" />
+            <rect x="3" y="1" width="1" height="2" fill="#0b1020" />
+            <rect x="1" y="4" width="6" height="3" fill="#f8fafc" />
+            <rect x="2" y="5" width="3" height="1" fill="#94a3b8" />
+          </svg>
+          <h3>Guardar</h3>
+          <p>Tus PDFs quedan organizados y accesibles en el dispositivo.</p>
+        </article>
+
+        <article class="px-card">
+          <svg class="px-ico" viewBox="0 0 8 8" width="32" height="32"
+            shape-rendering="crispEdges" aria-hidden="true">
+            <rect x="2" y="2" width="3" height="1" fill="#9fb0cc" />
+            <rect x="2" y="5" width="3" height="1" fill="#9fb0cc" />
+            <rect x="0" y="3" width="2" height="2" fill="#4ade80" />
+            <rect x="6" y="0" width="2" height="2" fill="#4ade80" />
+            <rect x="6" y="6" width="2" height="2" fill="#4ade80" />
+          </svg>
+          <h3>Compartir</h3>
+          <p>Envía lo que necesites por correo, mensajería o cualquier app.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="px-panel" aria-labelledby="px-specs-title">
+      <h2 id="px-specs-title" class="px-h2">Ficha técnica</h2>
+      <dl class="px-specs">
+        <div>
+          <dt>Versión</dt>
+          <dd>{appVersion} (código {appVersionCode})</dd>
+        </div>
+        <div>
+          <dt>Sistema</dt>
+          <dd>{minAndroid}</dd>
+        </div>
+        <div>
+          <dt>Arquitecturas</dt>
+          <dd>{abis}</dd>
+        </div>
+        <div>
+          <dt>Tamaño</dt>
+          <dd>{appSize}</dd>
+        </div>
+        <div>
+          <dt>Paquete</dt>
+          <dd class="px-mono">{appPackage}</dd>
+        </div>
+      </dl>
+    </section>
+
+    <section class="px-panel" aria-labelledby="px-install-title">
+      <h2 id="px-install-title" class="px-h2">Cómo instalarla</h2>
+      <ol class="px-steps">
+        <li>
+          <span class="px-step-n">1</span>
+          <span>Descarga el archivo <code>PixelPDF.apk</code> en tu teléfono Android.</span>
+        </li>
+        <li>
+          <span class="px-step-n">2</span>
+          <span>Ábrelo y, si el sistema lo pide, permite instalar apps de esta fuente.</span>
+        </li>
+        <li>
+          <span class="px-step-n">3</span>
+          <span>Confirma la instalación y abre PixelPDF.</span>
+        </li>
+      </ol>
+      <p class="px-fine">
+        Es un APK fuera de Google Play, así que el sistema puede mostrar un aviso
+        de seguridad estándar. La descarga se sirve directamente desde este sitio.
+      </p>
+    </section>
+  </section>
+</Layout>
+
+<style>
+  .px {
+    --px-ink: #0b1020;
+    --px-bg: #131a2e;
+    --px-bg2: #0d1426;
+    --px-line: #2b3a5f;
+    --px-text: #e6edf7;
+    --px-muted: #9fb0cc;
+    --px-green: #4ade80;
+    --px-cyan: #38e1ff;
+    --px-pink: #ff6ec7;
+    --px-yellow: #ffd23f;
+
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 2.5rem;
+    font-family: ui-monospace, 'SFMono-Regular', 'Cascadia Mono', Menlo, Consolas,
+      'Courier New', monospace;
+    color: var(--px-text);
+    background-color: var(--px-bg);
+    background-image: repeating-linear-gradient(
+      0deg,
+      rgb(255 255 255 / 0.03) 0 1px,
+      transparent 1px 4px
+    );
+    border: 4px solid var(--px-ink);
+    box-shadow: 10px 10px 0 var(--px-ink);
+    image-rendering: pixelated;
+  }
+
+  /* ── Cabecera ─────────────────────────────────────────────── */
+  .px-hero { text-align: center; }
+
+  .px-logo {
+    display: block;
+    margin: 0 auto 0.75rem;
+    image-rendering: pixelated;
+    filter: drop-shadow(6px 6px 0 var(--px-ink));
+  }
+
+  .px-kicker {
+    margin: 0;
+    font-size: 0.72rem;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--px-cyan);
+  }
+
+  .px-title {
+    margin: 0.3rem 0 0.6rem;
+    font-size: 2.6rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--px-yellow);
+    text-shadow: 4px 4px 0 var(--px-ink);
+  }
+
+  .px-tagline {
+    max-width: 46ch;
+    margin: 0 auto;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    color: var(--px-muted);
+  }
+
+  .px-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    margin: 1.6rem auto 0;
+    padding: 0.95rem 1.5rem;
+    font: inherit;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--px-ink);
+    background: var(--px-green);
+    border: 4px solid var(--px-ink);
+    box-shadow: 6px 6px 0 var(--px-ink);
+    text-decoration: none;
+  }
+  .px-btn:hover {
+    transform: translate(3px, 3px);
+    box-shadow: 3px 3px 0 var(--px-ink);
+    color: var(--px-ink);
+    text-decoration: none;
+  }
+  .px-btn:active {
+    transform: translate(6px, 6px);
+    box-shadow: 0 0 0 var(--px-ink);
+  }
+  .px-btn:focus-visible {
+    outline: 3px dashed var(--px-cyan);
+    outline-offset: 4px;
+  }
+  .px-btn-size { font-size: 0.78rem; font-weight: 600; opacity: 0.7; }
+
+  .px-note {
+    margin: 1rem 0 0;
+    font-size: 0.82rem;
+    letter-spacing: 0.04em;
+    color: var(--px-muted);
+  }
+  .px-hl { color: var(--px-green); }
+
+  /* ── Paneles ──────────────────────────────────────────────── */
+  .px-panel {
+    margin-top: 1.75rem;
+    padding: 1.25rem;
+    background: var(--px-bg2);
+    border: 4px solid var(--px-ink);
+    box-shadow: 6px 6px 0 var(--px-ink);
+  }
+
+  .px-h2 {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin: 0 0 1rem;
+    font-size: 0.95rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--px-cyan);
+  }
+  .px-h2::before {
+    content: '';
+    flex: none;
+    width: 10px;
+    height: 10px;
+    background: var(--px-pink);
+    box-shadow: 3px 3px 0 var(--px-ink);
+  }
+
+  /* ── Tarjetas ─────────────────────────────────────────────── */
+  .px-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+  }
+
+  .px-card {
+    padding: 1rem;
+    background: var(--px-bg);
+    border: 3px solid var(--px-line);
+  }
+
+  .px-ico {
+    display: block;
+    image-rendering: pixelated;
+  }
+
+  .px-card h3 {
+    margin: 0.6rem 0 0.35rem;
+    font-size: 0.9rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--px-yellow);
+  }
+  .px-card p {
+    margin: 0;
+    font-size: 0.84rem;
+    line-height: 1.5;
+    color: var(--px-muted);
+  }
+
+  /* ── Ficha técnica ────────────────────────────────────────── */
+  .px-specs { margin: 0; }
+
+  .px-specs > div {
+    display: grid;
+    grid-template-columns: 11rem 1fr;
+    gap: 0.75rem;
+    align-items: baseline;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px dotted var(--px-line);
+  }
+  .px-specs > div + div { margin-top: 0.6rem; }
+  .px-specs > div:last-child { border-bottom: none; padding-bottom: 0; }
+
+  .px-specs dt {
+    font-size: 0.78rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--px-muted);
+  }
+  .px-specs dd { margin: 0; font-size: 0.9rem; }
+  .px-mono { font-size: 0.78rem; color: var(--px-cyan); word-break: break-all; }
+
+  /* ── Pasos ────────────────────────────────────────────────── */
+  .px-steps {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: 0.85rem;
+  }
+  .px-steps li {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    font-size: 0.9rem;
+    line-height: 1.5;
+  }
+  .px-step-n {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    font-weight: 700;
+    color: var(--px-ink);
+    background: var(--px-pink);
+    border: 3px solid var(--px-ink);
+    box-shadow: 3px 3px 0 var(--px-ink);
+  }
+  .px-steps code {
+    padding: 0.1rem 0.35rem;
+    font-size: 0.82rem;
+    color: var(--px-cyan);
+    background: rgb(56 225 255 / 0.1);
+  }
+
+  .px-fine {
+    margin: 1.1rem 0 0;
+    padding-left: 0.75rem;
+    font-size: 0.78rem;
+    line-height: 1.5;
+    color: var(--px-muted);
+    border-left: 4px solid var(--px-yellow);
+  }
+
+  /* ── Responsividad ────────────────────────────────────────── */
+  @media (max-width: 560px) {
+    .px {
+      padding: 1.5rem 1rem 2rem;
+      box-shadow: 6px 6px 0 var(--px-ink);
+    }
+    .px-title { font-size: 2rem; }
+    .px-grid { grid-template-columns: 1fr; }
+    .px-specs > div { grid-template-columns: 1fr; gap: 0.15rem; }
+    .px-btn { width: 100%; }
+    .px-btn-size { display: none; }
+  }
+</style>
