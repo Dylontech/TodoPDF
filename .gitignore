@@ -20,6 +20,9 @@ dist/
 build/
 .astro/
 
+# Binarios de la app móvil (APK)
+*.apk
+
 # Logs
 *.log
 npm-debug.log*
