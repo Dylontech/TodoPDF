@@ -420,6 +420,25 @@ h1, h2, h3 { line-height: 1.2; }
   border-top: 1px solid rgb(255 255 255 / 0.08);
 }
 
+.footer-links { display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap; }
+.footer-links a { color: #cbd5e1; }
+.footer-about { margin: 1.25rem auto 0; max-width: 42rem; }
+.footer-about h2 { margin: 0 0 0.4rem; color: #e2e8f0; font-size: 1rem; }
+.footer-about p { margin: 0.4rem 0; }
+.footer-about > p a { color: #cbd5e1; }
+.footer-about .footer-links { margin-top: 0.65rem; }
+.footer-ai-note { font-size: 0.78rem; }
+.legal-notice { z-index: 50; }
+.legal-notice .modal-panel { max-height: min(90vh, 42rem); overflow-y: auto; }
+.legal-notice .modal-panel h2 { margin-top: 0; }
+.legal-notice .modal-panel p { line-height: 1.6; }
+.legal-notice .modal-actions .btn-primary { width: 100%; }
+
+.legal-page { max-width: 760px; margin: 0 auto; }
+.legal-page h1 { margin-top: 0; }
+.legal-page h2 { margin-top: 2rem; }
+.legal-page p { color: #cbd5e1; }
+
 /* ─────────────────────────────────────────────────────────────
    Responsividad
    ───────────────────────────────────────────────────────────── */

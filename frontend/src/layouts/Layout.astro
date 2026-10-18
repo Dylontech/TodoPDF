@@ -32,6 +32,45 @@ const { title = 'TodoPDF', noindex = false } = Astro.props;
     </main>
     <footer class="footer">
       <p>TodoPDF · Procesamiento privado: invitados en memoria o en un espacio temporal aislado que se elimina al instante.</p>
+      <nav class="footer-links" aria-label="Información legal">
+        <a href="/privacidad">Aviso de privacidad</a>
+        <a href="/terminos">Términos y condiciones</a>
+        <a href="/LICENSE">Licencia MIT</a>
+      </nav>
+      <section class="footer-about" aria-labelledby="footer-about-title">
+        <h2 id="footer-about-title">Más de DylonTech</h2>
+        <p>Visita <a href="https://www.dylontech.com" target="_blank" rel="noopener noreferrer">dylontech.com</a> para conocer otros proyectos y lo que estamos desarrollando.</p>
+        <nav class="footer-links" aria-label="Contacto y proyecto">
+          <a href="mailto:dylongabrielm@dylontech.com">Contacto: dylongabrielm@dylontech.com</a>
+          <a href="https://github.com/Dylontech/TodoPDF" target="_blank" rel="noopener noreferrer">TodoPDF en GitHub</a>
+        </nav>
+        <p class="footer-ai-note">TodoPDF fue desarrollado con ayuda de inteligencia artificial.</p>
+      </section>
     </footer>
+    <div id="legal-notice" class="modal-overlay legal-notice" role="dialog" aria-modal="true" aria-labelledby="legal-notice-title" aria-describedby="legal-notice-copy" hidden>
+      <section class="modal-panel">
+        <h2 id="legal-notice-title">Antes de continuar</h2>
+        <p id="legal-notice-copy">Al usar TodoPDF aceptas el <a href="/privacidad">aviso de privacidad</a> y los <a href="/terminos">términos y condiciones</a>. Eres responsable de los archivos que subas y debes tener derecho y autorización para utilizarlos.</p>
+        <p>Los archivos de invitados se procesan en memoria o en espacio temporal; al iniciar sesión, los resultados pueden almacenarse en el servidor y aparecer en tu historial.</p>
+        <div class="modal-actions">
+          <button id="accept-legal-notice" type="button" class="btn-primary">Aceptar y continuar</button>
+        </div>
+      </section>
+    </div>
+    <script is:inline>
+      const legalNotice = document.getElementById('legal-notice');
+      const legalAccept = document.getElementById('accept-legal-notice');
+      const legalNoticeKey = 'todopdf-legal-notice-accepted-v1';
+      try {
+        if (localStorage.getItem(legalNoticeKey) !== 'yes') legalNotice.hidden = false;
+      } catch {
+        legalNotice.hidden = false;
+      }
+      legalAccept.addEventListener('click', () => {
+        try { localStorage.setItem(legalNoticeKey, 'yes'); } catch {}
+        legalNotice.hidden = true;
+      });
+      if (!legalNotice.hidden) legalAccept.focus();
+    </script>
   </body>
 </html>
